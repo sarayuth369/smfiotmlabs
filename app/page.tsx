@@ -345,6 +345,12 @@ export default function Home() {
                     <div className="absolute top-3 left-3 chip bg-white/90 backdrop-blur border-white shadow">
                       <span className="w-2 h-2 rounded-full bg-brand-500 pulse-ring" /> Live
                     </div>
+                    <a
+                      href="#contact"
+                      className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold shadow-lg shadow-brand-900/20 transition"
+                    >
+                      <I.Phone2 className="w-4 h-4" /> ปรึกษาฟรี
+                    </a>
                   </div>
                   <div className="mt-5">
                     <div className="text-xs text-brand-700/70 font-medium">CEO & Founder</div>
