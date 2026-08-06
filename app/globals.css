@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7faf7;
+  --foreground: #0f2a1a;
+  --brand-50: #eaf7ee;
+  --brand-100: #cfeed8;
+  --brand-200: #a3dcb5;
+  --brand-300: #6dc78d;
+  --brand-400: #34ab63;
+  --brand-500: #1f8b4f;
+  --brand-600: #0f6f3d;
+  --brand-700: #0b5730;
+  --brand-800: #093f24;
+  --brand-900: #062818;
+  --accent: #f4c542;
+  --surface: #ffffff;
+  --surface-alt: #f0f6f1;
+  --border: #d9e7dd;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-accent: var(--accent);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-border: var(--border);
+  --font-sans: var(--font-prompt);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-prompt), system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-feature-settings: "ss01";
 }
+
+/* subtle background pattern for hero */
+.hero-bg {
+  background:
+    radial-gradient(1200px 500px at 90% -10%, rgba(52, 171, 99, 0.18), transparent 60%),
+    radial-gradient(900px 400px at -10% 20%, rgba(15, 111, 61, 0.12), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f2faf3 100%);
+}
+
+.section-bg-alt {
+  background: linear-gradient(180deg, #f7faf7 0%, #eef7f0 100%);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px -12px rgba(11, 87, 48, 0.25);
+  border-color: var(--brand-300);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--brand-100);
+}
+
+.grid-fade {
+  mask-image: linear-gradient(180deg, black 60%, transparent 100%);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float { animation: float 6s ease-in-out infinite; }
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(52,171,99,0.5); }
+  70% { box-shadow: 0 0 0 20px rgba(52,171,99,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,171,99,0); }
+}
+.pulse-ring { animation: pulse-ring 2.4s infinite; }
