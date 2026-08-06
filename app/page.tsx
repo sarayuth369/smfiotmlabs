@@ -262,12 +262,18 @@ export default function Home() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <a
-              href="#contact"
+            <Link
+              href="/login"
+              className="hidden sm:inline-flex items-center rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 px-4 py-2 text-sm font-semibold transition"
+            >
+              เข้าสู่ระบบ
+            </Link>
+            <Link
+              href="/signup"
               className="hidden sm:inline-flex items-center gap-2 rounded-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold transition"
             >
-              ปรึกษาฟรี
-            </a>
+              สมัครสมาชิก
+            </Link>
             <button className="md:hidden text-brand-800" aria-label="Menu">
               <I.Menu />
             </button>
