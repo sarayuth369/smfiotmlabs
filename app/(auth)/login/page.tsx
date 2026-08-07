@@ -11,6 +11,7 @@ import {
   OrDivider,
   AuthI,
 } from "../_components/AuthUI";
+import { LegalLinks } from "../_components/LegalLinks";
 
 export default function LoginPage() {
   return (
@@ -134,10 +135,10 @@ function LoginForm() {
       </form>
 
       <p className="mt-8 text-center text-xs text-brand-900/50">
-        การเข้าสู่ระบบถือว่าคุณยอมรับ{" "}
-        <a className="underline hover:text-brand-700" href="#">ข้อกำหนดการใช้งาน</a>{" "}
-        และ{" "}
-        <a className="underline hover:text-brand-700" href="#">นโยบายความเป็นส่วนตัว</a>
+        <LegalLinks
+          prefix="การเข้าสู่ระบบถือว่าคุณยอมรับ "
+          linkClassName="underline hover:text-brand-700"
+        />
       </p>
     </div>
   );

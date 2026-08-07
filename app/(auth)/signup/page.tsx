@@ -11,6 +11,7 @@ import {
   OrDivider,
   AuthI,
 } from "../_components/AuthUI";
+import { LegalLinks } from "../_components/LegalLinks";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -198,15 +199,17 @@ export default function SignupPage() {
           )}
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-brand-900/75">
-          <input type="checkbox" required className="mt-1 rounded border-border text-brand-600 focus:ring-brand-500/30" />
-          <span>
-            ยอมรับ{" "}
-            <a href="#" className="text-brand-600 hover:text-brand-800 underline">ข้อกำหนดการใช้งาน</a>{" "}
-            และ{" "}
-            <a href="#" className="text-brand-600 hover:text-brand-800 underline">นโยบายความเป็นส่วนตัว</a>
-          </span>
-        </label>
+        <div className="flex items-start gap-2 text-sm text-brand-900/75">
+          <input
+            id="accept-terms"
+            type="checkbox"
+            required
+            className="mt-1 rounded border-border text-brand-600 focus:ring-brand-500/30"
+          />
+          <label htmlFor="accept-terms" className="flex-1">
+            <LegalLinks prefix="ยอมรับ " />
+          </label>
+        </div>
 
         <button
           type="submit"
