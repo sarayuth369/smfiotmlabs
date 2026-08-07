@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   TextField,
   PasswordField,
@@ -11,12 +13,58 @@ import {
 } from "../_components/AuthUI";
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
+  return (
+    <Suspense fallback={<div className="h-8 animate-pulse bg-brand-100/50 rounded" />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") || "/dashboard";
+  const initialError = params.get("error");
+
+  const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialError);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    setTimeout(() => setLoading(false), 900);
+
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") || "").trim();
+    const password = String(form.get("password") || "");
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setLoading(false);
+      setError(mapAuthError(error.message));
+      return;
+    }
+    router.replace(next);
+    router.refresh();
+  }
+
+  async function onGoogle() {
+    setError(null);
+    setOauthLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
+    });
+    if (error) {
+      setOauthLoading(false);
+      setError(error.message);
+    }
   }
 
   return (
@@ -31,11 +79,16 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {error && <AlertError message={error} />}
+
       <button
         type="button"
-        className="w-full flex items-center justify-center gap-3 rounded-xl border border-border bg-white hover:bg-brand-50 transition py-3 font-medium text-brand-900"
+        onClick={onGoogle}
+        disabled={oauthLoading}
+        className="w-full flex items-center justify-center gap-3 rounded-xl border border-border bg-white hover:bg-brand-50 disabled:opacity-70 transition py-3 font-medium text-brand-900"
       >
-        <GoogleIcon /> เข้าสู่ระบบด้วย Google
+        <GoogleIcon />
+        {oauthLoading ? "กำลังเปิด Google..." : "เข้าสู่ระบบด้วย Google"}
       </button>
 
       <OrDivider />
@@ -88,4 +141,19 @@ export default function LoginPage() {
       </p>
     </div>
   );
+}
+
+function AlertError({ message }: { message: string }) {
+  return (
+    <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      {message}
+    </div>
+  );
+}
+
+function mapAuthError(msg: string) {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials")) return "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+  if (m.includes("email not confirmed")) return "กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ";
+  return msg;
 }

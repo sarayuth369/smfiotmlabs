@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   TextField,
   PasswordField,
@@ -11,15 +13,92 @@ import {
 } from "../_components/AuthUI";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const strength = getStrength(password);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
+    setInfo(null);
     setLoading(true);
-    setTimeout(() => setLoading(false), 900);
+
+    const form = new FormData(e.currentTarget);
+    const name = String(form.get("name") || "").trim();
+    const phone = String(form.get("phone") || "").trim();
+    const email = String(form.get("email") || "").trim().toLowerCase();
+    const pw = String(form.get("password") || "");
+
+    const supabase = createClient();
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pw,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { full_name: name, phone },
+      },
+    });
+
+    if (error) {
+      setLoading(false);
+      setError(mapSignupError(error.message));
+      return;
+    }
+
+    // Supabase returns identities=[] when the email is already registered
+    // (with "Confirm email" enabled) — signal duplicate to the user.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setLoading(false);
+      setError("อีเมลนี้ถูกใช้งานแล้ว กรุณาเข้าสู่ระบบหรือใช้อีเมลอื่น");
+      return;
+    }
+
+    // Best-effort profile row for password signups.
+    // With the recommended DB trigger (see SUPABASE_SETUP.md) this is redundant but safe.
+    if (data.user) {
+      await supabase.from("profiles").upsert(
+        {
+          id: data.user.id,
+          email,
+          full_name: name,
+          phone,
+          provider: "email",
+        },
+        { onConflict: "id" }
+      );
+    }
+
+    // Session is null when email confirmation is required
+    if (!data.session) {
+      setLoading(false);
+      setInfo("สมัครสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี");
+      return;
+    }
+
+    router.replace("/dashboard");
+    router.refresh();
+  }
+
+  async function onGoogle() {
+    setError(null);
+    setOauthLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
+    });
+    if (error) {
+      setOauthLoading(false);
+      setError(error.message);
+    }
   }
 
   return (
@@ -34,11 +113,24 @@ export default function SignupPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+      {info && (
+        <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          {info}
+        </div>
+      )}
+
       <button
         type="button"
-        className="w-full flex items-center justify-center gap-3 rounded-xl border border-border bg-white hover:bg-brand-50 transition py-3 font-medium text-brand-900"
+        onClick={onGoogle}
+        disabled={oauthLoading}
+        className="w-full flex items-center justify-center gap-3 rounded-xl border border-border bg-white hover:bg-brand-50 disabled:opacity-70 transition py-3 font-medium text-brand-900"
       >
-        <GoogleIcon /> สมัครด้วย Google
+        <GoogleIcon /> {oauthLoading ? "กำลังเปิด Google..." : "สมัครด้วย Google"}
       </button>
 
       <OrDivider />
@@ -142,4 +234,14 @@ function getStrength(pw: string) {
     { label: "แข็งแรง", color: "bg-brand-600" },
   ];
   return { score, ...levels[score] };
+}
+
+function mapSignupError(msg: string) {
+  const m = msg.toLowerCase();
+  if (m.includes("user already registered") || m.includes("already been registered"))
+    return "อีเมลนี้ถูกใช้งานแล้ว กรุณาเข้าสู่ระบบหรือใช้อีเมลอื่น";
+  if (m.includes("password should be at least"))
+    return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
+  if (m.includes("invalid email")) return "รูปแบบอีเมลไม่ถูกต้อง";
+  return msg;
 }
