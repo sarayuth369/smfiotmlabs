@@ -1,0 +1,72 @@
+import Image from "next/image";
+import Link from "next/link";
+
+function Facebook({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M13 22v-8h3l1-4h-4V7.5c0-1.1.4-2 2-2h2V2h-3c-3 0-5 1.8-5 5v3H6v4h3v8h4z" />
+    </svg>
+  );
+}
+function Line({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 3C6.5 3 2 6.6 2 11c0 4 3.6 7.3 8.4 7.9.3.1.7.2.8.5 0 .3-.1.7-.2 1l-.2 1c-.1.3 0 .7.4.5.4-.2 4.8-2.8 6.5-4.8C19.4 15.4 22 13.4 22 11c0-4.4-4.5-8-10-8zm-4 10H6.5v-4.6h-.7v-.5h2v.5h-.7V13zm2.4 0h-.6v-5h.6v5zm3.5 0h-.5l-1.6-2.6V13h-.6V8h.6l1.5 2.4V8h.6v5zm3.8-4.5h-1.5v.9h1.4v.5h-1.4v.9h1.5v.5h-2v-3.3h2v.5z" />
+    </svg>
+  );
+}
+function Phone2({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z" />
+    </svg>
+  );
+}
+
+export function SiteFooter() {
+  return (
+    <footer className="bg-brand-900 text-brand-100/80">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid md:grid-cols-4 gap-8">
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center overflow-hidden">
+              <Image src="/images/logo.png" alt="M Labs" width={36} height={36} className="object-contain" />
+            </div>
+            <div>
+              <div className="font-bold text-white">SMF IoT</div>
+              <div className="text-xs text-brand-200/70">by M Labs</div>
+            </div>
+          </div>
+          <p className="mt-4 text-sm max-w-md leading-relaxed">
+            เทคโนโลยีเกษตรอัจฉริยะที่พัฒนาโดยคนไทยเพื่อคนไทย — เพิ่มผลผลิต ลดต้นทุน สนับสนุนเกษตรกรทุกระดับ
+          </p>
+        </div>
+        <div>
+          <div className="text-white font-semibold mb-3">เมนู</div>
+          <ul className="space-y-2 text-sm">
+            <li><Link href="/#mission" className="hover:text-white">จุดประสงค์</Link></li>
+            <li><Link href="/#how" className="hover:text-white">การทำงาน</Link></li>
+            <li><Link href="/#features" className="hover:text-white">จุดเด่น</Link></li>
+            <li><Link href="/#app" className="hover:text-white">SMF App</Link></li>
+            <li><Link href="/pricing" className="hover:text-white">Pricing</Link></li>
+            <li><Link href="/iot-nodes" className="hover:text-white">IoT Node Price</Link></li>
+          </ul>
+        </div>
+        <div>
+          <div className="text-white font-semibold mb-3">ติดต่อเรา</div>
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-center gap-2"><Facebook /> smfiotbymlabs</li>
+            <li className="flex items-center gap-2"><Line /> @smfiotmlabs</li>
+            <li className="flex items-center gap-2"><Phone2 /> xxx-xxx-xxxx</li>
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 text-xs text-brand-200/60 flex flex-wrap items-center justify-between gap-3">
+          <div>© {new Date().getFullYear()} SMF IoT by M Labs. All rights reserved.</div>
+          <div>Made with 🌱 in Thailand</div>
+        </div>
+      </div>
+    </footer>
+  );
+}

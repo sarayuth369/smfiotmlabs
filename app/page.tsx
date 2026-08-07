@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SiteHeader } from "./_components/SiteHeader";
+import { SiteFooter } from "./_components/SiteFooter";
 
 /* ---------- Icons (inline SVG so we don't add deps) ---------- */
 
@@ -232,54 +234,7 @@ function Stat({ v, l }: { v: string; l: string }) {
 export default function Home() {
   return (
     <>
-      {/* ============ NAV ============ */}
-      <header className="sticky top-0 z-40 backdrop-blur bg-white/75 border-b border-brand-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-white border border-brand-200 flex items-center justify-center overflow-hidden">
-              {/* Fallback initial if logo file not yet present */}
-              <Image
-                src="/images/logo.png"
-                alt="M Labs"
-                width={36}
-                height={36}
-                className="object-contain"
-              />
-            </div>
-            <div className="leading-tight">
-              <div className="font-bold text-brand-800 text-lg">SMF IoT</div>
-              <div className="text-[10px] text-brand-700/70 -mt-0.5">by M Labs</div>
-            </div>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-8 text-sm text-brand-900/80 font-medium">
-            <a href="#mission" className="hover:text-brand-600">จุดประสงค์</a>
-            <a href="#how" className="hover:text-brand-600">การทำงาน</a>
-            <a href="#features" className="hover:text-brand-600">จุดเด่น</a>
-            <a href="#sensors" className="hover:text-brand-600">เซนเซอร์</a>
-            <a href="#app" className="hover:text-brand-600">SMF App</a>
-            <a href="#contact" className="hover:text-brand-600">ติดต่อ</a>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className="hidden sm:inline-flex items-center rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 px-4 py-2 text-sm font-semibold transition"
-            >
-              เข้าสู่ระบบ
-            </Link>
-            <Link
-              href="/signup"
-              className="hidden sm:inline-flex items-center gap-2 rounded-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold transition"
-            >
-              สมัครสมาชิก
-            </Link>
-            <button className="md:hidden text-brand-800" aria-label="Menu">
-              <I.Menu />
-            </button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         {/* ============ HERO ============ */}
@@ -690,48 +645,7 @@ export default function Home() {
         </section>
       </main>
 
-      {/* ============ FOOTER ============ */}
-      <footer className="bg-brand-900 text-brand-100/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid md:grid-cols-4 gap-8">
-          <div className="md:col-span-2">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center overflow-hidden">
-                <Image src="/images/logo.png" alt="M Labs" width={36} height={36} className="object-contain" />
-              </div>
-              <div>
-                <div className="font-bold text-white">SMF IoT</div>
-                <div className="text-xs text-brand-200/70">by M Labs</div>
-              </div>
-            </div>
-            <p className="mt-4 text-sm max-w-md leading-relaxed">
-              เทคโนโลยีเกษตรอัจฉริยะที่พัฒนาโดยคนไทยเพื่อคนไทย — เพิ่มผลผลิต ลดต้นทุน สนับสนุนเกษตรกรทุกระดับ
-            </p>
-          </div>
-          <div>
-            <div className="text-white font-semibold mb-3">เมนู</div>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#mission" className="hover:text-white">จุดประสงค์</a></li>
-              <li><a href="#how" className="hover:text-white">การทำงาน</a></li>
-              <li><a href="#features" className="hover:text-white">จุดเด่น</a></li>
-              <li><a href="#app" className="hover:text-white">SMF App</a></li>
-            </ul>
-          </div>
-          <div>
-            <div className="text-white font-semibold mb-3">ติดต่อเรา</div>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-center gap-2"><I.Facebook className="w-4 h-4" /> smfiotbymlabs</li>
-              <li className="flex items-center gap-2"><I.Line className="w-4 h-4" /> @smfiotmlabs</li>
-              <li className="flex items-center gap-2"><I.Phone2 className="w-4 h-4" /> xxx-xxx-xxxx</li>
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 text-xs text-brand-200/60 flex flex-wrap items-center justify-between gap-3">
-            <div>© {new Date().getFullYear()} SMF IoT by M Labs. All rights reserved.</div>
-            <div>Made with 🌱 in Thailand</div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }
