@@ -102,7 +102,74 @@ create trigger on_auth_user_created
 
 หมายเหตุ: การเช็ค "email ซ้ำ" ในหน้า signup อาศัยพฤติกรรมของ Supabase — เมื่อเปิด Confirm email ระบบจะคืน `identities: []` แทนที่จะแจ้ง error เพื่อกัน user enumeration โค้ดฝั่ง client ตรวจสอบเงื่อนไขนี้แล้วแจ้งผู้ใช้ว่า "อีเมลนี้ถูกใช้งานแล้ว"
 
-## 5. `.env.local`
+## 5. ระบบ Plan + PromptPay Payment
+
+รัน SQL นี้เพื่อเพิ่ม column `plan` ในตาราง profiles และสร้างตาราง `payment_requests` สำหรับรับแจ้งชำระเงิน
+
+```sql
+-- เพิ่มคอลัมน์ plan ให้ profiles (default = starter สำหรับ user ใหม่ทั้งหมด)
+alter table public.profiles
+  add column if not exists plan text not null default 'starter'
+    check (plan in ('starter','pro','business','enterprise'));
+
+-- ตารางบันทึกคำขอชำระเงิน / อัปเกรดแพ็กเกจ
+create table if not exists public.payment_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  plan text not null check (plan in ('pro','business')),
+  amount numeric(10,2) not null,
+  method text not null default 'promptpay',
+  status text not null default 'pending' check (status in ('pending','verified','rejected')),
+  ref_note text,
+  created_at timestamptz default now(),
+  verified_at timestamptz
+);
+
+alter table public.payment_requests enable row level security;
+
+drop policy if exists "payment_requests_select_own" on public.payment_requests;
+create policy "payment_requests_select_own"
+  on public.payment_requests for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "payment_requests_insert_own" on public.payment_requests;
+create policy "payment_requests_insert_own"
+  on public.payment_requests for insert
+  with check (auth.uid() = user_id);
+```
+
+### ตั้งค่า PromptPay ID
+
+แก้ค่าตัวแปรใน [.env.local](.env.local) เพื่อกำหนดผู้รับเงิน:
+
+```
+NEXT_PUBLIC_PROMPTPAY_ID=0812345678
+NEXT_PUBLIC_PROMPTPAY_NAME=M Labs Co., Ltd.
+```
+
+- `NEXT_PUBLIC_PROMPTPAY_ID` — เบอร์โทร (10 หลัก) หรือเลขบัตรประชาชน (13 หลัก) ของบัญชี PromptPay
+- ไม่ตั้งค่า → ระบบใช้ค่า placeholder `0000000000` (QR ใช้ทดสอบไม่ได้จริง)
+
+### การ verify การชำระเงิน
+
+- ระบบปัจจุบัน (**demo mode**): ผู้ใช้กด "ฉันชำระเงินแล้ว" → อัปเกรดทันที + บันทึก `payment_requests` เป็น `pending`
+- Production: ควรทำ verify ด้วยหนึ่งใน:
+  - Payment gateway จริง (Omise, 2C2P, Stripe TH) แล้ว webhook อัปเดต `status = 'verified'` และ `profiles.plan`
+  - ตรวจสอบ statement ธนาคาร → SQL manual:
+    ```sql
+    -- ยืนยันการชำระของ user + อัปเดต plan
+    update public.payment_requests
+      set status = 'verified', verified_at = now()
+      where id = '<request-id>';
+
+    update public.profiles
+      set plan = 'pro'  -- หรือ 'business'
+      where id = '<user-id>';
+    ```
+
+---
+
+## 6. `.env.local`
 
 ต้องมีคีย์เหล่านี้ (มีอยู่แล้วในโปรเจกต์):
 

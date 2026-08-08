@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { PLAN_INFO, type PlanId } from "@/lib/plans";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -6,10 +8,23 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, plan")
+    .eq("id", user!.id)
+    .single();
+
   const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
   const displayName =
-    (meta.full_name as string) || (meta.name as string) || user?.email?.split("@")[0] || "สมาชิก";
+    profile?.full_name ||
+    (meta.full_name as string) ||
+    (meta.name as string) ||
+    user?.email?.split("@")[0] ||
+    "สมาชิก";
   const provider = user?.app_metadata?.provider ?? "email";
+  const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
+  const planInfo = PLAN_INFO[plan];
+  const canUpgrade = plan !== "business" && plan !== "enterprise";
 
   return (
     <div>
@@ -22,6 +37,33 @@ export default async function DashboardPage() {
             อีเมล: {user?.email} • เข้าสู่ระบบผ่าน{" "}
             <span className="font-semibold capitalize">{provider}</span>
           </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${planInfo.badgeClass}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              แพ็กเกจ: {planInfo.name}
+              <span className="opacity-70 font-normal normal-case tracking-normal">
+                • {planInfo.label}
+              </span>
+            </div>
+            {canUpgrade && (
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white text-brand-700 hover:bg-brand-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+                Upgrade Plan
+              </Link>
+            )}
+            <Link
+              href="/pricing"
+              className="text-xs text-white/70 hover:text-white underline underline-offset-2"
+            >
+              ดูรายละเอียดแพ็กเกจทั้งหมด
+            </Link>
+          </div>
         </div>
       </section>
 
