@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { PLAN_INFO, type PlanId } from "@/lib/plans";
+import { computeNextExpiry } from "@/lib/payment";
 
 export type CreatePaymentResult =
   | {
@@ -121,7 +122,17 @@ export async function pollStripePayment(paymentIntentId: string): Promise<PollRe
     if (pi.status === "succeeded") {
       const plan = pi.metadata.plan as PlanId;
       if (plan === "pro" || plan === "business") {
-        await supabase.from("profiles").update({ plan }).eq("id", user.id);
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("plan_expires_at")
+          .eq("id", user.id)
+          .single();
+        const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null);
+
+        await supabase
+          .from("profiles")
+          .update({ plan, plan_expires_at: nextExpiry.toISOString() })
+          .eq("id", user.id);
         await supabase
           .from("payment_requests")
           .update({ status: "verified", verified_at: new Date().toISOString() })

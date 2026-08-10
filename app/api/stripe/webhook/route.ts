@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { computeNextExpiry } from "@/lib/payment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,17 @@ export async function POST(req: NextRequest) {
     if (userId && (plan === "pro" || plan === "business")) {
       const admin = createAdminClient();
 
-      await admin.from("profiles").update({ plan }).eq("id", userId);
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("plan_expires_at")
+        .eq("id", userId)
+        .single();
+      const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null);
+
+      await admin
+        .from("profiles")
+        .update({ plan, plan_expires_at: nextExpiry.toISOString() })
+        .eq("id", userId);
       await admin
         .from("payment_requests")
         .update({ status: "verified", verified_at: new Date().toISOString() })

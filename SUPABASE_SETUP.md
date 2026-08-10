@@ -112,6 +112,10 @@ alter table public.profiles
   add column if not exists plan text not null default 'starter'
     check (plan in ('starter','pro','business','enterprise'));
 
+-- วันหมดอายุแพ็กเกจ — set ตอนอัปเกรด/ต่ออายุสำเร็จ (1 เดือน)
+alter table public.profiles
+  add column if not exists plan_expires_at timestamptz;
+
 -- ตารางบันทึกคำขอชำระเงิน / อัปเกรดแพ็กเกจ
 create table if not exists public.payment_requests (
   id uuid primary key default gen_random_uuid(),
@@ -125,6 +129,10 @@ create table if not exists public.payment_requests (
   created_at timestamptz default now(),
   verified_at timestamptz
 );
+
+-- กันกรณีตารางถูกสร้างไว้ก่อนหน้าโดยไม่มี column นี้
+alter table public.payment_requests
+  add column if not exists stripe_payment_intent_id text;
 
 create index if not exists payment_requests_stripe_pi_idx
   on public.payment_requests(stripe_payment_intent_id);
