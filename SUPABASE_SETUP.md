@@ -196,7 +196,56 @@ stripe payment_intents confirm pi_xxx --payment-method-data type=promptpay
 
 ---
 
-## 6. `.env.local`
+## 6. ตารางสั่งซื้ออุปกรณ์ (hardware_orders)
+
+รัน SQL นี้เพื่อสร้างตารางสั่งซื้อ IoT Node — ระบบใช้ Stripe PromptPay เดียวกับการอัปเกรดแพ็กเกจ:
+
+```sql
+create table if not exists public.hardware_orders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  sku text not null check (sku in ('starter_node','pro_node','complete_kit')),
+  product_name text not null,
+  amount numeric(10,2) not null,
+  status text not null default 'pending'
+    check (status in ('pending','paid','shipped','delivered','canceled')),
+  stripe_payment_intent_id text,
+  ref_note text,
+  created_at timestamptz default now(),
+  paid_at timestamptz
+);
+
+create index if not exists hardware_orders_user_idx
+  on public.hardware_orders(user_id);
+create index if not exists hardware_orders_stripe_pi_idx
+  on public.hardware_orders(stripe_payment_intent_id);
+
+alter table public.hardware_orders enable row level security;
+
+drop policy if exists "hardware_orders_select_own" on public.hardware_orders;
+create policy "hardware_orders_select_own"
+  on public.hardware_orders for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "hardware_orders_insert_own" on public.hardware_orders;
+create policy "hardware_orders_insert_own"
+  on public.hardware_orders for insert
+  with check (auth.uid() = user_id);
+```
+
+### หลังชำระเงินสำเร็จ
+
+- Stripe webhook (`payment_intent.succeeded` metadata `type=hardware`) จะอัปเดต `status = 'paid'` และ `paid_at` อัตโนมัติ
+- ทีมงานตรวจ order → เปลี่ยน status เป็น `shipped` / `delivered` ตามความคืบหน้าจัดส่ง:
+  ```sql
+  update public.hardware_orders
+    set status = 'shipped'
+    where id = '<order-id>';
+  ```
+
+---
+
+## 7. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 

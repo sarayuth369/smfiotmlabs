@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
 import { PlanCard } from "./_components/PlanCard";
@@ -42,22 +43,51 @@ export default async function DashboardPage() {
       </section>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
-        {[
-          { t: "ฟาร์มของฉัน", d: "ยังไม่มีฟาร์มที่ผูกกับบัญชี", cta: "เพิ่มฟาร์ม" },
-          { t: "อุปกรณ์ (SMF IoT Node)", d: "ยังไม่มีอุปกรณ์ที่เชื่อมต่อ", cta: "เพิ่มอุปกรณ์" },
-          { t: "การแจ้งเตือน", d: "ตั้งค่า LINE Notify และเงื่อนไขการแจ้งเตือน", cta: "ตั้งค่า" },
-        ].map((c) => (
-          <div key={c.t} className="card p-6 flex flex-col">
-            <div className="text-sm font-semibold text-brand-800">{c.t}</div>
-            <p className="mt-1 text-sm text-brand-900/60 flex-1">{c.d}</p>
+        <div className="card p-6 flex flex-col">
+          <div className="text-sm font-semibold text-brand-800">ฟาร์มของฉัน</div>
+          <p className="mt-1 text-sm text-brand-900/60 flex-1">ยังไม่มีฟาร์มที่ผูกกับบัญชี</p>
+          <button
+            type="button"
+            className="mt-4 self-start rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
+          >
+            เพิ่มฟาร์ม
+          </button>
+        </div>
+
+        <div className="card p-6 flex flex-col">
+          <div className="text-sm font-semibold text-brand-800">อุปกรณ์ (SMF IoT Node)</div>
+          <p className="mt-1 text-sm text-brand-900/60 flex-1">ยังไม่มีอุปกรณ์ที่เชื่อมต่อ</p>
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              className="mt-4 self-start rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
+              className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
             >
-              {c.cta}
+              เพิ่มอุปกรณ์
             </button>
+            <Link
+              href="/iot-nodes"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-sm font-semibold px-4 py-2 transition"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2l1 4h11l-2 8H8L6 6H3" />
+                <circle cx="9" cy="20" r="1.5" />
+                <circle cx="17" cy="20" r="1.5" />
+              </svg>
+              สั่งซื้อ SMF IoT Node
+            </Link>
           </div>
-        ))}
+        </div>
+
+        <div className="card p-6 flex flex-col">
+          <div className="text-sm font-semibold text-brand-800">การแจ้งเตือน</div>
+          <p className="mt-1 text-sm text-brand-900/60 flex-1">ตั้งค่า LINE Notify และเงื่อนไขการแจ้งเตือน</p>
+          <button
+            type="button"
+            className="mt-4 self-start rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
+          >
+            ตั้งค่า
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 card p-6 sm:p-8">

@@ -1,95 +1,8 @@
 import Link from "next/link";
 import { SiteHeader } from "../_components/SiteHeader";
 import { SiteFooter } from "../_components/SiteFooter";
-
-type Tier = "starter" | "best" | "pro" | "enterprise";
-
-const nodes: {
-  name: string;
-  badge: string;
-  badgeTier: Tier;
-  price: string;
-  priceNote?: string;
-  audience: string[];
-  specs: string[];
-  cta: { label: string; href: string };
-}[] = [
-  {
-    name: "Starter Node",
-    badge: "Starter",
-    badgeTier: "starter",
-    price: "฿2,990",
-    audience: ["ทดลองระบบ", "โรงเรือน", "ฟาร์มขนาดเล็ก"],
-    specs: [
-      "ESP32 Controller",
-      "WiFi",
-      "Temperature Sensor",
-      "Humidity Sensor",
-      "Relay 2 Channel",
-      "Ready to use",
-      "Cloud Ready",
-    ],
-    cta: { label: "Order Now", href: "/login" },
-  },
-  {
-    name: "Pro Node",
-    badge: "Best Seller",
-    badgeTier: "best",
-    price: "฿4,990",
-    audience: ["ฟาร์มทั่วไป", "Smart Farm"],
-    specs: [
-      "ESP32",
-      "Temperature",
-      "Humidity",
-      "Soil Moisture",
-      "Light Sensor",
-      "Relay 4 Channel",
-      "OTA Update",
-      "Cloud Ready",
-      "Mobile App",
-    ],
-    cta: { label: "Order Now", href: "/login" },
-  },
-  {
-    name: "Complete Smart Farm Kit",
-    badge: "Professional",
-    badgeTier: "pro",
-    price: "฿9,900",
-    audience: ["ฟาร์มจริง", "ติดตั้งพร้อมใช้งาน"],
-    specs: [
-      "ESP32 Pro",
-      "Soil Moisture",
-      "Temperature",
-      "Humidity",
-      "Light",
-      "Water Level",
-      "Power Supply",
-      "Waterproof Box",
-      "Relay",
-      "Ready Install",
-    ],
-    cta: { label: "Order Now", href: "/login" },
-  },
-  {
-    name: "Industrial Node",
-    badge: "Enterprise",
-    badgeTier: "enterprise",
-    price: "Contact Sales",
-    audience: ["โรงงาน", "Smart Agriculture", "Industrial"],
-    specs: [
-      "Industrial PLC",
-      "RS485",
-      "Modbus",
-      "LoRa",
-      "4G",
-      "Ethernet",
-      "Waterproof IP65",
-      "Unlimited Sensors",
-      "Remote Management",
-    ],
-    cta: { label: "Contact Sales", href: "/#contact" },
-  },
-];
+import { HardwareGrid } from "./_components/HardwareGrid";
+import { createClient } from "@/lib/supabase/server";
 
 const services = [
   {
@@ -122,23 +35,10 @@ const services = [
       "วิเคราะห์ความชื้น",
     ],
     comingSoon: true,
-    cta: null,
+    cta: null as { label: string; href: string } | null,
     accent: "🤖",
   },
 ];
-
-function badgeClass(t: Tier) {
-  switch (t) {
-    case "best":
-      return "bg-accent text-brand-900";
-    case "pro":
-      return "bg-brand-600 text-white";
-    case "enterprise":
-      return "bg-brand-900 text-white";
-    default:
-      return "bg-brand-100 text-brand-700";
-  }
-}
 
 function Check() {
   return (
@@ -148,7 +48,12 @@ function Check() {
   );
 }
 
-export default function IotNodesPage() {
+export default async function IotNodesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <>
       <SiteHeader />
@@ -165,49 +70,9 @@ export default function IotNodesPage() {
           </div>
         </section>
 
-        {/* IoT Node Cards */}
         <section className="py-14 sm:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
-              {nodes.map((n) => (
-                <div key={n.name} className="relative card p-6 flex flex-col">
-                  <div
-                    className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full ${badgeClass(
-                      n.badgeTier
-                    )}`}
-                  >
-                    {n.badge}
-                  </div>
-
-                  <div className="mt-2 text-sm font-semibold text-brand-700">{n.name}</div>
-                  <div className="mt-2 flex items-baseline gap-1 text-brand-800">
-                    <span className="text-3xl font-extrabold tracking-tight">{n.price}</span>
-                  </div>
-
-                  <div className="mt-4 text-xs font-semibold text-brand-900/55">เหมาะสำหรับ</div>
-                  <div className="text-sm text-brand-900/75 mt-1">{n.audience.join(" • ")}</div>
-
-                  <div className="mt-5 text-xs font-semibold text-brand-900/55">Specifications</div>
-                  <ul className="mt-2 space-y-1.5 text-sm text-brand-900/80 flex-1">
-                    {n.specs.map((s) => (
-                      <li key={s} className="flex items-start gap-2">
-                        <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
-                          <Check />
-                        </span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href={n.cta.href}
-                    className="mt-6 text-center rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-3 text-sm transition"
-                  >
-                    {n.cta.label}
-                  </Link>
-                </div>
-              ))}
-            </div>
+            <HardwareGrid isAuthed={!!user} />
           </div>
         </section>
 
