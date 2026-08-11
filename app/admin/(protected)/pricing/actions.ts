@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function updatePlan(planId: string, formData: FormData) {
+export async function updatePlan(planId: string, formData: FormData): Promise<void> {
   await requireModule("pricing");
-  if (!["starter", "pro", "business", "enterprise"].includes(planId)) {
-    return { ok: false, error: "Invalid plan" } as const;
-  }
+  if (!["starter", "pro", "business", "enterprise"].includes(planId)) return;
 
   const name = String(formData.get("name") ?? "").trim();
   const price = Number(formData.get("price") ?? 0);
@@ -29,10 +27,8 @@ export async function updatePlan(planId: string, formData: FormData) {
       name, price, price_note, badge, audience, features, sort_order, is_active,
       updated_at: new Date().toISOString(),
     }, { onConflict: "plan_id" });
-
-  if (error) return { ok: false, error: error.message } as const;
+  if (error) console.warn("[pricing.updatePlan] db error", error);
 
   revalidatePath("/pricing");
   revalidatePath("/admin/pricing");
-  return { ok: true } as const;
 }

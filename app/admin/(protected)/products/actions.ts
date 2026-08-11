@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function updateProduct(sku: string, formData: FormData) {
+export async function updateProduct(sku: string, formData: FormData): Promise<void> {
   await requireModule("products");
-  if (!["starter_node", "pro_node", "complete_kit"].includes(sku)) {
-    return { ok: false, error: "Invalid SKU" } as const;
-  }
+  if (!["starter_node", "pro_node", "complete_kit"].includes(sku)) return;
 
   const name = String(formData.get("name") ?? "").trim();
   const price = Number(formData.get("price") ?? 0);
@@ -28,10 +26,8 @@ export async function updateProduct(sku: string, formData: FormData) {
       sku, name, price, badge, badge_tier, audience, specs, sort_order, is_active,
       updated_at: new Date().toISOString(),
     }, { onConflict: "sku" });
-
-  if (error) return { ok: false, error: error.message } as const;
+  if (error) console.warn("[products.updateProduct] db error", error);
 
   revalidatePath("/iot-nodes");
   revalidatePath("/admin/products");
-  return { ok: true } as const;
 }
