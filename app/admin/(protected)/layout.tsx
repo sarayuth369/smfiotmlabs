@@ -8,8 +8,10 @@ type NavItem = { href: string; label: string; mod: Parameters<typeof canAccess>[
 
 const NAV: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", mod: "dashboard" },
+  { href: "/admin/notifications", label: "Notifications", mod: "notifications" },
   { href: "/admin/pricing", label: "Subscription Plans", mod: "pricing" },
   { href: "/admin/products", label: "IoT Node Prices", mod: "products" },
+  { href: "/admin/settings", label: "System Settings", mod: "settings" },
   { href: "/admin/admin-users", label: "Admin Users", mod: "admin_users" },
 ];
 

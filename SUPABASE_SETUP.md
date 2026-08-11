@@ -349,7 +349,87 @@ ADMIN_SESSION_SECRET=<random string ≥32 chars>
 
 ---
 
-## 8. `.env.local`
+## 8. ระบบแจ้งเตือน (Announcements + Web Notifications + LINE)
+
+รัน SQL นี้เพื่อสร้างตาราง `announcements`, `notifications`, `system_settings`:
+
+```sql
+-- ประกาศ (Admin สร้าง)
+create table if not exists public.announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  message text not null,
+  target_plans text[] not null default '{}',
+  channels text[] not null default '{}',
+  status text not null default 'sent' check (status in ('draft','sent','failed','partial')),
+  line_error text,
+  web_recipients_count int default 0,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
+alter table public.announcements enable row level security;
+-- ไม่มี policy = client อ่าน/เขียนไม่ได้ (admin เท่านั้น ผ่าน service_role)
+
+-- แจ้งเตือนราย user (fanout จากประกาศ)
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  announcement_id uuid references public.announcements(id) on delete cascade,
+  title text not null,
+  message text not null,
+  read_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists notifications_user_unread_idx
+  on public.notifications(user_id, read_at);
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "notifications_select_own" on public.notifications;
+create policy "notifications_select_own"
+  on public.notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "notifications_update_own" on public.notifications;
+create policy "notifications_update_own"
+  on public.notifications for update
+  using (auth.uid() = user_id);
+
+-- System settings (key/value) — เก็บ LINE config และ system config อื่น ๆ
+create table if not exists public.system_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now(),
+  updated_by uuid
+);
+
+alter table public.system_settings enable row level security;
+-- ไม่มี policy = admin เท่านั้น
+
+-- Seed default LINE config row (ค่าว่าง — admin กรอกใน UI)
+insert into public.system_settings (key, value) values
+  ('line', jsonb_build_object(
+    'channel_access_token', '',
+    'group_id', '',
+    'enabled', false
+  ))
+on conflict (key) do nothing;
+```
+
+### วิธีหา LINE Channel Access Token + Group ID
+
+1. เข้า https://developers.line.biz/console → สร้าง Provider + **Messaging API** channel
+2. tab **Messaging API** → **Channel access token** → คลิก Issue → คัด token
+3. tab **Basic settings** → เปิด **Auto-reply** + **Greeting message** เป็น disabled
+4. เพิ่ม bot เป็นเพื่อนใน LINE → เพิ่มเข้ากลุ่ม `@smfiotmlabs`
+5. หา **Group ID**: ใน tab Webhook → ตั้ง URL ชั่วคราวรับ event หรือใช้เครื่องมือ [LINE Bot Designer] — เมื่อมีข้อความในกลุ่ม จะได้ event `groupId` ยาว ๆ ขึ้นต้น `C...`
+6. ใส่ทั้งสองค่าที่ **Admin → Settings → LINE** แล้วติ๊ก Enabled
+
+---
+
+## 9. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 

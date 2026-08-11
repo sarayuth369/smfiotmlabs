@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
 import { PlanCard } from "./_components/PlanCard";
+import { NotificationsPanel, type NotificationItem } from "./_components/NotificationsPanel";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -26,6 +27,15 @@ export default async function DashboardPage() {
   const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
   const expiresAt = (profile?.plan_expires_at as string | null) ?? null;
 
+  const { data: notifs } = await supabase
+    .from("notifications")
+    .select("id, title, message, read_at, created_at")
+    .eq("user_id", user!.id)
+    .order("read_at", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: false })
+    .limit(20);
+  const notifications = (notifs ?? []) as NotificationItem[];
+
   return (
     <div>
       <section className="rounded-3xl bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 text-white p-8 sm:p-10 relative overflow-hidden">
@@ -41,6 +51,8 @@ export default async function DashboardPage() {
           <PlanCard plan={plan} expiresAt={expiresAt} />
         </div>
       </section>
+
+      <NotificationsPanel items={notifications} />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
         <div className="card p-6 flex flex-col">
