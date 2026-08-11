@@ -1,11 +1,11 @@
 import { requireModule } from "@/lib/admin/current";
-import { getLineSettings } from "@/lib/admin/settings";
+import { getLineSettings, isLineReady } from "@/lib/admin/settings";
 import { updateLineSettings, sendLineTest } from "./actions";
 
 export default async function LineSettingsPage() {
   await requireModule("settings");
   const line = await getLineSettings();
-  const ready = line.enabled && !!line.channel_access_token && !!line.group_id;
+  const ready = isLineReady(line);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -13,7 +13,7 @@ export default async function LineSettingsPage() {
         <div className="text-xs text-brand-700/70 font-medium">System Settings</div>
         <h1 className="text-2xl font-bold text-brand-800">LINE Integration</h1>
         <p className="text-sm text-brand-900/60 mt-1">
-          ตั้งค่า LINE Messaging API เพื่อส่งประกาศไปยัง LINE Group @smfiotmlabs
+          ตั้งค่า LINE Messaging API เพื่อส่งประกาศไปยังผู้ติดตาม LINE OA / Group
         </p>
       </div>
 
@@ -47,18 +47,36 @@ export default async function LineSettingsPage() {
 
         <div>
           <label className="block text-sm font-semibold text-brand-900/85 mb-1.5">
-            Group ID (ปลายทาง)
+            โหมดการส่ง
+          </label>
+          <select
+            name="mode"
+            defaultValue={line.mode}
+            className="w-full rounded-xl border border-border bg-white px-4 py-2.5 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition"
+          >
+            <option value="broadcast">Broadcast — ส่งให้ทุกคนที่เพิ่ม OA เป็นเพื่อน (แนะนำสำหรับ @smfiotmlabs)</option>
+            <option value="group">Group — ส่งเข้ากลุ่ม LINE ที่ระบุ (ต้องมี Group ID)</option>
+            <option value="user">User — ส่งหา user คนเดียว (ต้องมี User ID)</option>
+          </select>
+          <p className="mt-1 text-xs text-brand-900/50">
+            Broadcast จำกัดตามโควตา OA (Free tier = 300 ข้อความ/เดือน)
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-brand-900/85 mb-1.5">
+            Target ID <span className="font-normal text-brand-900/50">(เฉพาะโหมด Group / User)</span>
           </label>
           <input
             type="text"
-            name="group_id"
-            defaultValue={line.group_id}
-            placeholder="Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            name="target_id"
+            defaultValue={line.target_id}
+            placeholder="Group ID ขึ้นต้นด้วย C หรือ User ID ขึ้นต้นด้วย U"
             autoComplete="off"
             className="w-full rounded-xl border border-border bg-white px-4 py-2.5 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition font-mono text-sm"
           />
           <p className="mt-1 text-xs text-brand-900/50">
-            Group ID ที่ต้องการส่ง (ขึ้นต้นด้วย C) — หาได้จาก webhook event หรือ LINE Bot Designer
+            โหมด Broadcast ไม่ต้องกรอก — ปล่อยว่างได้
           </p>
         </div>
 
@@ -85,7 +103,9 @@ export default async function LineSettingsPage() {
       <form action={sendLineTest} className="card p-6">
         <div className="text-sm font-semibold text-brand-800">ทดสอบการเชื่อมต่อ</div>
         <p className="text-xs text-brand-900/60 mt-1">
-          ส่งข้อความทดสอบไปยัง Group ID ที่ตั้งค่าไว้
+          {line.mode === "broadcast"
+            ? "ส่งข้อความทดสอบไปยังทุกคนที่เพิ่ม OA — ใช้โควตา 1 ข้อความ"
+            : "ส่งข้อความทดสอบไปยัง Target ID ที่ตั้งค่าไว้"}
         </p>
         <button
           type="submit"

@@ -1,14 +1,18 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export type LineMode = "broadcast" | "group" | "user";
+
 export type LineSettings = {
   channel_access_token: string;
-  group_id: string;
+  mode: LineMode;
+  target_id: string; // only used when mode is 'group' or 'user'
   enabled: boolean;
 };
 
 const DEFAULT_LINE: LineSettings = {
   channel_access_token: "",
-  group_id: "",
+  mode: "broadcast",
+  target_id: "",
   enabled: false,
 };
 
@@ -20,12 +24,27 @@ export async function getLineSettings(): Promise<LineSettings> {
     .eq("key", "line")
     .maybeSingle();
 
-  const v = (data?.value ?? {}) as Partial<LineSettings>;
+  const v = (data?.value ?? {}) as Partial<LineSettings> & { group_id?: string };
+  const mode: LineMode =
+    v.mode === "group" || v.mode === "user" || v.mode === "broadcast"
+      ? v.mode
+      : v.group_id
+      ? "group"
+      : DEFAULT_LINE.mode;
+
   return {
     channel_access_token: v.channel_access_token ?? DEFAULT_LINE.channel_access_token,
-    group_id: v.group_id ?? DEFAULT_LINE.group_id,
+    mode,
+    // Backward compat: if old row has group_id, fall through to target_id
+    target_id: v.target_id ?? v.group_id ?? DEFAULT_LINE.target_id,
     enabled: v.enabled ?? DEFAULT_LINE.enabled,
   };
+}
+
+export function isLineReady(line: LineSettings): boolean {
+  if (!line.enabled || !line.channel_access_token) return false;
+  if (line.mode === "broadcast") return true;
+  return !!line.target_id;
 }
 
 export async function saveLineSettings(next: LineSettings, updatedBy?: string) {

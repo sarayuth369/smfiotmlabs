@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireModule } from "@/lib/admin/current";
-import { getLineSettings } from "@/lib/admin/settings";
-import { pushLineText } from "@/lib/line";
+import { getLineSettings, isLineReady } from "@/lib/admin/settings";
+import { broadcastLineText, pushLineText } from "@/lib/line";
 
 const VALID_PLANS = ["starter", "pro", "business", "enterprise"] as const;
 const VALID_CHANNELS = ["web", "line"] as const;
@@ -88,17 +88,17 @@ export async function sendAnnouncement(formData: FormData): Promise<void> {
     }
   }
 
-  // LINE push
+  // LINE broadcast / push
   if (channels.includes("line")) {
     const line = await getLineSettings();
-    if (!line.enabled || !line.channel_access_token || !line.group_id) {
+    if (!isLineReady(line)) {
       lineError = "LINE ยังไม่ถูกตั้งค่า / ปิดใช้งานอยู่";
     } else {
-      const res = await pushLineText(
-        line.channel_access_token,
-        line.group_id,
-        `📢 ${title}\n\n${message}`
-      );
+      const text = `📢 ${title}\n\n${message}`;
+      const res =
+        line.mode === "broadcast"
+          ? await broadcastLineText(line.channel_access_token, text)
+          : await pushLineText(line.channel_access_token, line.target_id, text);
       if (!res.ok) lineError = res.error;
     }
   }

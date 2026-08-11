@@ -412,20 +412,45 @@ alter table public.system_settings enable row level security;
 insert into public.system_settings (key, value) values
   ('line', jsonb_build_object(
     'channel_access_token', '',
-    'group_id', '',
+    'mode', 'broadcast',
+    'target_id', '',
     'enabled', false
   ))
 on conflict (key) do nothing;
 ```
 
-### วิธีหา LINE Channel Access Token + Group ID
+### วิธีตั้ง LINE Official Account (@smfiotmlabs)
 
-1. เข้า https://developers.line.biz/console → สร้าง Provider + **Messaging API** channel
-2. tab **Messaging API** → **Channel access token** → คลิก Issue → คัด token
-3. tab **Basic settings** → เปิด **Auto-reply** + **Greeting message** เป็น disabled
-4. เพิ่ม bot เป็นเพื่อนใน LINE → เพิ่มเข้ากลุ่ม `@smfiotmlabs`
-5. หา **Group ID**: ใน tab Webhook → ตั้ง URL ชั่วคราวรับ event หรือใช้เครื่องมือ [LINE Bot Designer] — เมื่อมีข้อความในกลุ่ม จะได้ event `groupId` ยาว ๆ ขึ้นต้น `C...`
-6. ใส่ทั้งสองค่าที่ **Admin → Settings → LINE** แล้วติ๊ก Enabled
+**ใช้โหมด Broadcast** — ส่งประกาศให้ทุกคนที่เพิ่ม OA เป็นเพื่อนโดยตรง ไม่ต้องมี target ID
+
+1. เข้า https://developers.line.biz/console → login ด้วย Business Account ที่ผูก OA `@smfiotmlabs`
+2. เลือก Provider → เข้า channel **Messaging API** ของ OA (ถ้ายังไม่มี → กด Create channel → เลือก Messaging API + link เข้า OA)
+3. tab **Basic settings** → เลื่อนหา **Response settings** → เปิด **Allow bot to join group chats** (ถ้าจะใช้ group ด้วย)
+4. tab **Messaging API** → **Channel access token (long-lived)** → กด Issue → คัด token
+5. LINE Official Account Manager (https://manager.line.biz/) → เข้า OA → **Settings → Response settings**
+   - **Chat**: Off
+   - **Webhooks**: On
+   - **Auto-response messages**: Off (ป้องกันตอบทับ broadcast)
+   - **Greeting messages**: On/Off ตามต้องการ
+6. Admin → **Settings → LINE** ในเว็บ
+   - วาง Channel Access Token
+   - โหมด: **Broadcast**
+   - Target ID: ปล่อยว่าง
+   - ติ๊ก Enabled → บันทึก → กดทดสอบ
+
+### ข้อจำกัดของ Broadcast
+
+- **Free tier**: 300 ข้อความ/เดือน (นับรวม broadcast + push + multicast/แต่ละ recipient นับ 1)
+- **Light tier**: 15,000/เดือน
+- **Standard tier**: 45,000/เดือน (+ overage)
+- ตรวจโควตาที่ https://manager.line.biz/ → OA → Analytics → Messages
+
+### ทางเลือก: โหมด Group / User
+
+หากอยากส่งเข้ากลุ่ม LINE เฉพาะ (ไม่ใช่ OA broadcast):
+- โหมด **Group** — bot ต้องเป็นสมาชิกกลุ่มก่อน + ใส่ `groupId` (ขึ้นต้น C) ใน Target ID
+- โหมด **User** — bot ต้องเป็นเพื่อนของ user นั้น + ใส่ `userId` (ขึ้นต้น U)
+- หา ID ได้จาก webhook event เมื่อ user ส่งข้อความหา bot
 
 ---
 

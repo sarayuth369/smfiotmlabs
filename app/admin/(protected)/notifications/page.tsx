@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireModule } from "@/lib/admin/current";
-import { getLineSettings } from "@/lib/admin/settings";
+import { getLineSettings, isLineReady } from "@/lib/admin/settings";
 import { sendAnnouncement, deleteAnnouncement } from "./actions";
 
 type Announcement = {
@@ -62,7 +62,7 @@ export default async function AdminNotificationsPage() {
   ]);
 
   const list = (anns ?? []) as Announcement[];
-  const lineReady = line.enabled && !!line.channel_access_token && !!line.group_id;
+  const lineReady = isLineReady(line);
 
   return (
     <div className="space-y-8 max-w-5xl">
