@@ -4,12 +4,15 @@ import { SiteFooter } from "../_components/SiteFooter";
 import { PricingPlans } from "./_components/PricingPlans";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
+import { getSubscriptionPlans } from "@/lib/catalog";
 
 export default async function PricingPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const plans = await getSubscriptionPlans();
 
   let currentPlan: PlanId | null = null;
   if (user) {
@@ -45,7 +48,7 @@ export default async function PricingPage() {
 
         <section className="py-14 sm:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <PricingPlans currentPlan={currentPlan} isAuthed={!!user} />
+            <PricingPlans plans={plans} currentPlan={currentPlan} isAuthed={!!user} />
 
             <div className="mt-14 rounded-3xl bg-gradient-to-br from-brand-50 to-white border border-brand-100 p-8 sm:p-10 text-center">
               <h3 className="text-xl sm:text-2xl font-bold text-brand-800">Need a custom solution?</h3>

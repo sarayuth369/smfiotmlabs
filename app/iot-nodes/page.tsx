@@ -3,6 +3,7 @@ import { SiteHeader } from "../_components/SiteHeader";
 import { SiteFooter } from "../_components/SiteFooter";
 import { HardwareGrid } from "./_components/HardwareGrid";
 import { createClient } from "@/lib/supabase/server";
+import { getProducts } from "@/lib/catalog";
 
 const services = [
   {
@@ -53,6 +54,7 @@ export default async function IotNodesPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const products = await getProducts();
 
   return (
     <>
@@ -72,7 +74,7 @@ export default async function IotNodesPage() {
 
         <section className="py-14 sm:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <HardwareGrid isAuthed={!!user} />
+            <HardwareGrid products={products} isAuthed={!!user} />
           </div>
         </section>
 

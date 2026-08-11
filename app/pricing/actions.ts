@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { PLAN_INFO, type PlanId } from "@/lib/plans";
 import { computeNextExpiry } from "@/lib/payment";
+import { getPlanPrice } from "@/lib/catalog";
 
 export type CreatePaymentResult =
   | {
@@ -33,7 +34,7 @@ export async function createStripePromptPay(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "กรุณาเข้าสู่ระบบก่อน" };
 
-  const amount = PLAN_INFO[plan].price;
+  const amount = (await getPlanPrice(plan)) || PLAN_INFO[plan].price;
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const displayName =
     (meta.full_name as string) ||

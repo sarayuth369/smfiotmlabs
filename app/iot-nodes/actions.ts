@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { HARDWARE, isValidSku, type SKU } from "@/lib/hardware";
+import { getProduct } from "@/lib/catalog";
 
 export type CreateOrderResult =
   | {
@@ -22,7 +23,10 @@ export type CreateOrderResult =
 export async function createHardwareOrder(sku: string): Promise<CreateOrderResult> {
   if (!isValidSku(sku)) return { ok: false, error: "Invalid SKU" };
 
-  const item = HARDWARE[sku];
+  const dbItem = await getProduct(sku);
+  const item = dbItem
+    ? { name: dbItem.name, price: dbItem.price }
+    : HARDWARE[sku];
 
   const supabase = await createClient();
   const {
