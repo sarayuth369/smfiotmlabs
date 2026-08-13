@@ -80,33 +80,36 @@ export default async function DashboardPage() {
         <div className="card p-6 flex flex-col">
           <div className="text-sm font-semibold text-brand-800">อุปกรณ์ (SMF IoT Node)</div>
           <p className="mt-1 text-sm text-brand-900/60 flex-1">ยังไม่มีอุปกรณ์ที่เชื่อมต่อ</p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
             >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
               เพิ่มอุปกรณ์
             </button>
             <Link
               href="/iot-nodes"
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-sm font-semibold px-4 py-2 transition"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2l1 4h11l-2 8H8L6 6H3" />
                 <circle cx="9" cy="20" r="1.5" />
                 <circle cx="17" cy="20" r="1.5" />
               </svg>
-              สั่งซื้อ SMF IoT Node
+              สั่งซื้อ IoT Node
             </Link>
             <Link
               href="/dashboard/orders"
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-sm font-semibold px-4 py-2 transition"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 11l3 3L22 4" />
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
-              ตรวจสอบสถานะการสั่งซื้อ
+              ตรวจสอบการสั่งซื้อ
             </Link>
           </div>
         </div>

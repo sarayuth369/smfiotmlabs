@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
+import { PayButton } from "./_components/PayButton";
 
 type Order = {
   id: string;
@@ -81,8 +82,18 @@ export default async function OrdersPage() {
                       สั่งเมื่อ {formatThaiDate(o.created_at)}
                     </div>
                   </div>
-                  <div className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full ${badge.cls}`}>
-                    {badge.label}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {o.status === "pending" && (
+                      <PayButton
+                        orderId={o.id}
+                        orderNumber={o.order_number}
+                        productName={o.product_name}
+                        amount={o.amount}
+                      />
+                    )}
+                    <div className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full ${badge.cls}`}>
+                      {badge.label}
+                    </div>
                   </div>
                 </div>
 
@@ -96,7 +107,12 @@ export default async function OrdersPage() {
                     <div className="text-xs text-brand-900/55">ยอดชำระ</div>
                     <div className="font-semibold text-brand-800">฿{o.amount.toLocaleString()}</div>
                     <div className="text-xs text-brand-900/60">
-                      สถานะการชำระ: {paid ? "✓ ชำระแล้ว" : "รอชำระ"}
+                      สถานะการชำระ:{" "}
+                      {o.status === "canceled"
+                        ? "ยกเลิก"
+                        : paid
+                          ? "✓ ชำระแล้ว"
+                          : "รอชำระ"}
                     </div>
                   </div>
                   <div>
