@@ -8,6 +8,7 @@ export type Module =
   | "subscriptions"
   | "pricing"
   | "products"
+  | "orders"
   | "payments"
   | "notifications"
   | "content"
@@ -17,15 +18,15 @@ export type Module =
 
 const MATRIX: Record<AdminRole, Module[]> = {
   super_admin: [
-    "dashboard","members","farms","devices","subscriptions","pricing","products",
+    "dashboard","members","farms","devices","subscriptions","pricing","products","orders",
     "payments","notifications","content","settings","admin_users","logs",
   ],
   admin: [
-    "dashboard","members","farms","devices","subscriptions","pricing","products",
+    "dashboard","members","farms","devices","subscriptions","pricing","products","orders",
     "payments","notifications","logs",
   ],
-  support: ["dashboard","members","farms","subscriptions","payments","notifications"],
-  sales: ["dashboard","members","subscriptions","products","payments"],
+  support: ["dashboard","members","farms","subscriptions","payments","notifications","orders"],
+  sales: ["dashboard","members","subscriptions","products","orders","payments"],
   technician: ["dashboard","farms","devices","products","logs"],
   content: ["dashboard","notifications","content"],
 };
