@@ -100,29 +100,39 @@ export function CheckoutClient({
   }
 
   if (state === "waiting" || state === "processing" || state === "loading") {
+    const displayAmount = amount || total; // fallback to form total while Stripe call in-flight
     return (
       <div className="max-w-xl mx-auto card p-6 sm:p-8">
-        <div className="text-xs text-brand-700/70 font-medium">คำสั่งซื้อ</div>
-        <div className="font-mono text-lg font-bold text-brand-800">{orderNumber}</div>
+        <div className="text-xs text-brand-700/70 font-medium">หมายเลขคำสั่งซื้อ</div>
+        <div className="font-mono text-lg font-bold text-brand-800">
+          {orderNumber ?? (
+            <span className="text-brand-900/40 text-sm font-sans font-normal">กำลังสร้าง...</span>
+          )}
+        </div>
 
         <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
           <div className="flex justify-between text-sm">
             <span className="text-brand-900/70">{item.name} × {qty}</span>
-            <span className="font-semibold text-brand-800">฿{amount.toLocaleString()}</span>
+            <span className="font-semibold text-brand-800">฿{displayAmount.toLocaleString()}</span>
           </div>
         </div>
 
         <div className="mt-6 rounded-2xl border border-brand-100 p-4 bg-white text-center">
           <div className="text-xs text-brand-900/60">ชำระผ่าน PromptPay</div>
-          <div className="text-3xl font-extrabold text-brand-800 mt-1">฿{amount.toLocaleString()}</div>
+          <div className="text-3xl font-extrabold text-brand-800 mt-1">฿{displayAmount.toLocaleString()}</div>
           <div className="mt-1 text-[11px] text-brand-900/55">ประมวลผลโดย Stripe</div>
           <div className="mt-4 mx-auto w-60 h-60 bg-white rounded-xl border border-border flex items-center justify-center overflow-hidden">
             {state === "loading" ? (
-              <div className="text-xs text-brand-900/50">กำลังสร้าง QR...</div>
+              <div className="text-xs text-brand-900/50 text-center px-4">
+                กำลังติดต่อ Stripe...<br />
+                <span className="opacity-60">รอสักครู่ (5–10 วินาที)</span>
+              </div>
             ) : qrUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={qrUrl} alt="PromptPay QR" className="w-full h-full" />
-            ) : null}
+            ) : (
+              <div className="text-xs text-brand-900/50">รอ QR...</div>
+            )}
           </div>
           <div className="mt-3 text-[11px] text-brand-900/55">สแกนด้วยแอปธนาคาร • QR ใช้ได้ ~10 นาที</div>
         </div>
@@ -132,8 +142,22 @@ export function CheckoutClient({
             <span className="animate-ping absolute inset-0 rounded-full bg-brand-400 opacity-75" />
             <span className="relative rounded-full w-2.5 h-2.5 bg-brand-500" />
           </span>
-          {state === "processing" ? "กำลังยืนยันการชำระเงิน..." : "รอการชำระเงิน — บันทึกออเดอร์อัตโนมัติเมื่อได้รับเงิน"}
+          {state === "loading"
+            ? "กำลังสร้างคำสั่งซื้อ..."
+            : state === "processing"
+              ? "กำลังยืนยันการชำระเงิน..."
+              : "รอการชำระเงิน — บันทึกออเดอร์อัตโนมัติเมื่อได้รับเงิน"}
         </div>
+
+        {state !== "loading" && (
+          <button
+            type="button"
+            onClick={() => { setState("form"); setPid(null); setQrUrl(null); setOrderNumber(null); setAmount(0); }}
+            className="mt-4 w-full rounded-xl border border-border hover:bg-brand-50 text-brand-800 font-medium py-2.5 transition"
+          >
+            ยกเลิก / กลับไปแก้ไข
+          </button>
+        )}
       </div>
     );
   }
