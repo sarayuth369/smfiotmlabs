@@ -41,13 +41,14 @@ export async function POST(req: NextRequest) {
         .eq("stripe_payment_intent_id", pi.id);
     } else {
       const plan = pi.metadata.plan;
+      const months = parseInt(String(pi.metadata.months ?? "1"), 10) || 1;
       if (userId && (plan === "pro" || plan === "business")) {
         const { data: prof } = await admin
           .from("profiles")
           .select("plan_expires_at")
           .eq("id", userId)
           .single();
-        const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null);
+        const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null, months);
 
         await admin
           .from("profiles")

@@ -166,7 +166,7 @@ create policy "payment_requests_insert_own"
 - **Developers → Webhooks → Add endpoint**
 - Endpoint URL:
   - Dev (ใช้ Stripe CLI): `stripe listen --forward-to localhost:3000/api/stripe/webhook` (CLI จะให้ `whsec_...` โดยตรง)
-  - Prod: `https://smfiotmlabs.vercel.app/api/stripe/webhook`
+  - Prod: `https://smfiot.bkknex.com/api/stripe/webhook`
 - Events to send:
   - `payment_intent.succeeded`
   - `payment_intent.payment_failed`

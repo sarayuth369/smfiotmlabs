@@ -43,10 +43,21 @@ export default async function DashboardPage() {
         <div className="relative">
           <div className="text-white/80 text-sm">ยินดีต้อนรับกลับ 👋</div>
           <h1 className="mt-2 text-3xl sm:text-4xl font-bold">{displayName}</h1>
-          <p className="mt-2 text-white/85 text-sm">
-            อีเมล: {user?.email} • เข้าสู่ระบบผ่าน{" "}
-            <span className="font-semibold capitalize">{provider}</span>
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-white/85 text-sm">
+            <span>อีเมล: {user?.email}</span>
+            <span className="opacity-60">•</span>
+            <span>เข้าสู่ระบบผ่าน <span className="font-semibold capitalize">{provider}</span></span>
+            <Link
+              href="/dashboard/account"
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/25 hover:bg-white/25 px-3 py-1 text-xs font-semibold transition"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
+              Account
+            </Link>
+          </div>
 
           <PlanCard plan={plan} expiresAt={expiresAt} />
         </div>

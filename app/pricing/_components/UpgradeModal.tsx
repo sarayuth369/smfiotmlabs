@@ -5,7 +5,9 @@ import { PLAN_INFO } from "@/lib/plans";
 import { createStripePromptPay, pollStripePayment } from "../actions";
 
 type Plan = "pro" | "business";
-type State = "loading" | "waiting" | "processing" | "succeeded" | "expired" | "error";
+type State = "select" | "loading" | "waiting" | "processing" | "succeeded" | "expired" | "error";
+
+const MONTHS_OPTIONS = [1, 2, 3, 6, 12];
 
 export function UpgradeModal({
   open,
@@ -18,32 +20,20 @@ export function UpgradeModal({
 }) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [pid, setPid] = useState<string | null>(null);
-  const [state, setState] = useState<State>("loading");
+  const [state, setState] = useState<State>("select");
   const [error, setError] = useState<string | null>(null);
+  const [months, setMonths] = useState<number>(1);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reset + create PaymentIntent when modal opens
+  // Reset when modal opens/closes
   useEffect(() => {
     if (!open || !plan) return;
 
-    setState("loading");
+    setState("select");
     setError(null);
     setQrUrl(null);
     setPid(null);
-
-    let cancelled = false;
-    (async () => {
-      const res = await createStripePromptPay(plan);
-      if (cancelled) return;
-      if (!res.ok) {
-        setState("error");
-        setError(res.error);
-        return;
-      }
-      setQrUrl(res.qrImageUrl);
-      setPid(res.paymentIntentId);
-      setState("waiting");
-    })();
+    setMonths(1);
 
     document.body.style.overflow = "hidden";
     function onKey(e: KeyboardEvent) {
@@ -52,7 +42,6 @@ export function UpgradeModal({
     window.addEventListener("keydown", onKey);
 
     return () => {
-      cancelled = true;
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
     };
@@ -85,8 +74,24 @@ export function UpgradeModal({
     };
   }, [pid, state]);
 
+  async function startPayment() {
+    if (!plan) return;
+    setState("loading");
+    setError(null);
+    const res = await createStripePromptPay(plan, months);
+    if (!res.ok) {
+      setState("error");
+      setError(res.error);
+      return;
+    }
+    setQrUrl(res.qrImageUrl);
+    setPid(res.paymentIntentId);
+    setState("waiting");
+  }
+
   if (!open || !plan) return null;
   const info = PLAN_INFO[plan];
+  const total = info.price * months;
 
   return (
     <div
@@ -103,7 +108,7 @@ export function UpgradeModal({
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-start justify-between">
           <div>
-            <div className="text-xs text-brand-700/70 font-medium">อัปเกรดแพ็กเกจ</div>
+            <div className="text-xs text-brand-700/70 font-medium">อัปเกรด / ต่ออายุ</div>
             <div className="text-lg font-bold text-brand-800">SMF IoT {info.name}</div>
           </div>
           <button
@@ -126,7 +131,8 @@ export function UpgradeModal({
               <h3 className="mt-4 text-lg font-bold text-brand-800">ชำระเงินสำเร็จ</h3>
               <p className="mt-2 text-sm text-brand-900/70">
                 บัญชีของคุณอัปเกรดเป็นแพ็กเกจ{" "}
-                <span className="font-semibold">{info.name}</span> เรียบร้อยแล้ว
+                <span className="font-semibold">{info.name}</span>{" "}
+                <span className="font-semibold">{months} เดือน</span> เรียบร้อยแล้ว
               </p>
               <a
                 href="/dashboard"
@@ -144,10 +150,10 @@ export function UpgradeModal({
               <p className="mt-2 text-sm text-red-700 break-words">{error}</p>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => setState("select")}
                 className="mt-6 rounded-full border border-border hover:bg-brand-50 text-brand-800 font-medium px-6 py-2.5 text-sm transition"
               >
-                ปิด
+                กลับไปเลือกใหม่
               </button>
             </div>
           ) : state === "expired" ? (
@@ -167,15 +173,85 @@ export function UpgradeModal({
                 ปิด
               </button>
             </div>
+          ) : state === "select" ? (
+            <>
+              <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4">
+                <div className="text-xs text-brand-900/60">ราคา</div>
+                <div className="text-base font-semibold text-brand-800">
+                  ฿{info.price.toLocaleString()} <span className="text-xs font-normal text-brand-900/60">/ เดือน</span>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label className="block text-sm font-semibold text-brand-900/85 mb-2">
+                  ระยะเวลา (เดือน)
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {MONTHS_OPTIONS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMonths(m)}
+                      className={`rounded-lg border py-2 text-sm font-semibold transition ${
+                        months === m
+                          ? "bg-brand-600 text-white border-brand-600"
+                          : "bg-white text-brand-800 border-border hover:border-brand-400"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <label className="text-xs text-brand-900/60">หรือกำหนดเอง (1–12 เดือน):</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={months}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setMonths(Math.max(1, Math.min(12, v)));
+                    }}
+                    className="ml-2 w-20 rounded-lg border border-border px-2 py-1 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl bg-brand-800 text-white p-4 flex items-baseline justify-between">
+                <div>
+                  <div className="text-xs opacity-70">ยอดชำระรวม</div>
+                  <div className="text-xs opacity-60 mt-0.5">
+                    ฿{info.price.toLocaleString()} × {months} เดือน
+                  </div>
+                </div>
+                <div className="text-3xl font-extrabold">฿{total.toLocaleString()}</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={startPayment}
+                className="mt-5 w-full rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 transition"
+              >
+                ดำเนินการชำระเงิน (PromptPay)
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-2 w-full rounded-xl border border-border hover:bg-brand-50 text-brand-800 font-medium py-2.5 transition"
+              >
+                ยกเลิก
+              </button>
+            </>
           ) : (
             <>
               <div className="rounded-2xl border border-brand-100 p-4 bg-brand-50/40 text-center">
                 <div className="text-xs text-brand-900/60">ชำระผ่าน PromptPay</div>
                 <div className="text-3xl font-extrabold text-brand-800 mt-1">
-                  ฿{info.price.toLocaleString()}
+                  ฿{total.toLocaleString()}
                 </div>
                 <div className="mt-1 text-[11px] text-brand-900/55">
-                  รายการนี้ประมวลผลโดย Stripe
+                  {info.name} × {months} เดือน • ประมวลผลโดย Stripe
                 </div>
 
                 <div className="mt-4 mx-auto w-56 h-56 bg-white rounded-xl border border-border flex items-center justify-center overflow-hidden">

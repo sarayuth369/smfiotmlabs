@@ -22,11 +22,13 @@ export type CreatePaymentResult =
  * hosted by Stripe. The PromptPay QR is short-lived (~10 min).
  */
 export async function createStripePromptPay(
-  plan: "pro" | "business"
+  plan: "pro" | "business",
+  months: number = 1
 ): Promise<CreatePaymentResult> {
   if (plan !== "pro" && plan !== "business") {
     return { ok: false, error: "Invalid plan" };
   }
+  const n = Math.max(1, Math.min(12, Math.floor(months) || 1));
 
   const supabase = await createClient();
   const {
@@ -34,7 +36,8 @@ export async function createStripePromptPay(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "กรุณาเข้าสู่ระบบก่อน" };
 
-  const amount = (await getPlanPrice(plan)) || PLAN_INFO[plan].price;
+  const monthlyPrice = (await getPlanPrice(plan)) || PLAN_INFO[plan].price;
+  const amount = monthlyPrice * n;
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const displayName =
     (meta.full_name as string) ||
@@ -47,10 +50,11 @@ export async function createStripePromptPay(
       amount: amount * 100, // THB → satang
       currency: "thb",
       payment_method_types: ["promptpay"],
-      description: `SMF IoT — ${PLAN_INFO[plan].name} plan`,
+      description: `SMF IoT — ${PLAN_INFO[plan].name} plan × ${n} เดือน`,
       metadata: {
         user_id: user.id,
         plan,
+        months: String(n),
       },
     });
 
@@ -122,13 +126,14 @@ export async function pollStripePayment(paymentIntentId: string): Promise<PollRe
 
     if (pi.status === "succeeded") {
       const plan = pi.metadata.plan as PlanId;
+      const months = parseInt(String(pi.metadata.months ?? "1"), 10) || 1;
       if (plan === "pro" || plan === "business") {
         const { data: prof } = await supabase
           .from("profiles")
           .select("plan_expires_at")
           .eq("id", user.id)
           .single();
-        const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null);
+        const nextExpiry = computeNextExpiry(prof?.plan_expires_at ?? null, months);
 
         await supabase
           .from("profiles")
