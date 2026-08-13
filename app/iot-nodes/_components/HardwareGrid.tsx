@@ -1,10 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
 import type { SKU } from "@/lib/hardware";
 import type { ProductRow } from "@/lib/catalog";
-import { OrderModal } from "./OrderModal";
 
 type Tier = "starter" | "best" | "pro" | "enterprise";
 
@@ -47,7 +43,6 @@ export function HardwareGrid({
   products: ProductRow[];
   isAuthed: boolean;
 }) {
-  const [openSku, setOpenSku] = useState<SKU | null>(null);
   const activeProducts = products.filter((p) => p.is_active);
   const all = [...activeProducts, INDUSTRIAL];
 
@@ -58,14 +53,15 @@ export function HardwareGrid({
           const isIndustrial = n.sku === ("industrial_node" as unknown as SKU);
           const priceLabel = isIndustrial ? "Contact Sales" : `฿${n.price.toLocaleString()}`;
 
-          let cta: React.ReactNode;
-          if (isIndustrial) {
-            cta = <Link href="/#contact" className="mt-6 text-center rounded-full bg-brand-900 hover:bg-brand-800 text-white font-semibold px-5 py-3 text-sm transition">Contact Sales</Link>;
-          } else if (!isAuthed) {
-            cta = <Link href={`/login?next=/iot-nodes`} className="mt-6 text-center rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-3 text-sm transition">Order Now</Link>;
-          } else {
-            cta = <button type="button" onClick={() => setOpenSku(n.sku)} className="mt-6 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-3 text-sm transition">Order Now</button>;
-          }
+          const checkoutHref = isAuthed
+            ? `/iot-nodes/checkout?sku=${n.sku}`
+            : `/login?next=${encodeURIComponent(`/iot-nodes/checkout?sku=${n.sku}`)}`;
+
+          const cta = isIndustrial ? (
+            <Link href="/#contact" className="mt-6 text-center rounded-full bg-brand-900 hover:bg-brand-800 text-white font-semibold px-5 py-3 text-sm transition">Contact Sales</Link>
+          ) : (
+            <Link href={checkoutHref} className="mt-6 text-center rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-3 text-sm transition">Order Now</Link>
+          );
 
           return (
             <div key={n.sku} className="relative card p-6 flex flex-col">
@@ -105,7 +101,6 @@ export function HardwareGrid({
         })}
       </div>
 
-      <OrderModal open={!!openSku} sku={openSku} onClose={() => setOpenSku(null)} />
     </>
   );
 }

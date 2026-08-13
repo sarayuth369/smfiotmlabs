@@ -215,6 +215,24 @@ create table if not exists public.hardware_orders (
   paid_at timestamptz
 );
 
+-- คอลัมน์เพิ่มเติมสำหรับ order number, quantity, ที่อยู่จัดส่ง, tracking
+alter table public.hardware_orders
+  add column if not exists order_number text,
+  add column if not exists quantity int not null default 1 check (quantity between 1 and 100),
+  add column if not exists unit_price numeric(10,2),
+  add column if not exists ship_name text,
+  add column if not exists ship_phone text,
+  add column if not exists ship_address text,
+  add column if not exists ship_city text,
+  add column if not exists ship_postal text,
+  add column if not exists ship_note text,
+  add column if not exists tracking_number text,
+  add column if not exists tracking_carrier text;
+
+create unique index if not exists hardware_orders_order_number_uidx
+  on public.hardware_orders(order_number) where order_number is not null;
+create unique index if not exists hardware_orders_stripe_pi_uidx
+  on public.hardware_orders(stripe_payment_intent_id) where stripe_payment_intent_id is not null;
 create index if not exists hardware_orders_user_idx
   on public.hardware_orders(user_id);
 create index if not exists hardware_orders_stripe_pi_idx
@@ -235,13 +253,22 @@ create policy "hardware_orders_insert_own"
 
 ### หลังชำระเงินสำเร็จ
 
-- Stripe webhook (`payment_intent.succeeded` metadata `type=hardware`) จะอัปเดต `status = 'paid'` และ `paid_at` อัตโนมัติ
-- ทีมงานตรวจ order → เปลี่ยน status เป็น `shipped` / `delivered` ตามความคืบหน้าจัดส่ง:
+- ระบบไม่บันทึกออเดอร์ลง DB จนกว่าลูกค้าจะชำระเงินสำเร็จ (data buffered ใน Stripe PaymentIntent metadata)
+- Stripe webhook (`payment_intent.succeeded` metadata `type=hardware`) จะ **INSERT** ออเดอร์ใหม่ (idempotent by `stripe_payment_intent_id`) พร้อมข้อมูลจัดส่ง สถานะเริ่มต้น `paid`
+- ทีมงานตรวจ order → อัปเดตสถานะจัดส่ง + tracking:
   ```sql
   update public.hardware_orders
-    set status = 'shipped'
-    where id = '<order-id>';
+    set status = 'shipped',
+        tracking_number = 'TH1234567890',
+        tracking_carrier = 'Kerry Express'
+    where order_number = 'PN-20260813-4KZ2';
   ```
+- อัปเดตเป็น `delivered` เมื่อส่งมอบสำเร็จ
+
+### Order number format
+- `SN-YYYYMMDD-XXXX` — Starter Node
+- `PN-YYYYMMDD-XXXX` — Pro Node
+- `CK-YYYYMMDD-XXXX` — Complete Kit
 
 ---
 
