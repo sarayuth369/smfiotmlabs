@@ -9,7 +9,6 @@ import {
   generateOrderNumber,
   parseShippingFromForm,
   validateShipping,
-  type ShippingInfo,
 } from "@/lib/orders";
 
 export type StartResult =
@@ -170,4 +169,3 @@ export async function pollCheckout(paymentIntentId: string): Promise<PollResult>
   }
 }
 
-export type { ShippingInfo };
