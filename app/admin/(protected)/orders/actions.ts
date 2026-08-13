@@ -36,3 +36,14 @@ export async function updateOrder(orderId: string, formData: FormData): Promise<
   revalidatePath("/admin/orders");
   revalidatePath("/dashboard/orders");
 }
+
+export async function deleteOrder(orderId: string): Promise<void> {
+  await requireModule("orders");
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("hardware_orders").delete().eq("id", orderId);
+  if (error) console.warn("[admin.orders.delete] db error", error);
+
+  revalidatePath("/admin/orders");
+  revalidatePath("/dashboard/orders");
+}

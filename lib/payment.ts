@@ -24,6 +24,17 @@ export function formatThaiDate(iso: string): string {
   }).format(new Date(iso));
 }
 
+export function formatThaiDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
 export function daysUntil(iso: string): number {
   const now = new Date();
   const target = new Date(iso);

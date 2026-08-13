@@ -1,7 +1,8 @@
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { formatThaiDate } from "@/lib/payment";
+import { formatThaiDateTime } from "@/lib/payment";
 import { updateOrder } from "./actions";
+import { DeleteOrderButton } from "./_components/DeleteOrderButton";
 
 type Order = {
   id: string;
@@ -115,8 +116,8 @@ export default async function AdminOrdersPage() {
                       {o.order_number ?? o.id.slice(0, 8)}
                     </div>
                     <div className="text-xs text-brand-900/55 mt-0.5">
-                      สั่งเมื่อ {formatThaiDate(o.created_at)}
-                      {o.paid_at && ` • ชำระ ${formatThaiDate(o.paid_at)}`}
+                      สั่งเมื่อ {formatThaiDateTime(o.created_at)}
+                      {o.paid_at && ` • ชำระ ${formatThaiDateTime(o.paid_at)}`}
                     </div>
                   </div>
                   <div className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${badge.cls}`}>
@@ -212,6 +213,11 @@ export default async function AdminOrdersPage() {
                     Update
                   </button>
                 </form>
+
+                <DeleteOrderButton
+                  orderId={o.id}
+                  orderLabel={o.order_number ?? o.id.slice(0, 8)}
+                />
               </div>
             );
           })}
