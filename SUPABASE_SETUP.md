@@ -134,8 +134,17 @@ create table if not exists public.payment_requests (
 alter table public.payment_requests
   add column if not exists stripe_payment_intent_id text;
 
+-- Fields for admin Plan Upgrade / Renew Orders report
+alter table public.payment_requests
+  add column if not exists order_number text unique,
+  add column if not exists months integer default 1,
+  add column if not exists user_name text,
+  add column if not exists is_renew boolean default false;
+
 create index if not exists payment_requests_stripe_pi_idx
   on public.payment_requests(stripe_payment_intent_id);
+create index if not exists payment_requests_order_number_idx
+  on public.payment_requests(order_number);
 
 alter table public.payment_requests enable row level security;
 

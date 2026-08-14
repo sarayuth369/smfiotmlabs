@@ -6,6 +6,7 @@ import { stripe } from "@/lib/stripe";
 import { PLAN_INFO, type PlanId } from "@/lib/plans";
 import { computeNextExpiry } from "@/lib/payment";
 import { getPlanPrice } from "@/lib/catalog";
+import { generatePlanOrderNumber } from "@/lib/orders";
 
 export type CreatePaymentResult =
   | {
@@ -39,22 +40,34 @@ export async function createStripePromptPay(
   const monthlyPrice = (await getPlanPrice(plan)) || PLAN_INFO[plan].price;
   const amount = monthlyPrice * n;
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const displayName =
-    (meta.full_name as string) ||
-    (meta.name as string) ||
-    user.email?.split("@")[0] ||
-    "SMF User";
+  const metaName = (meta.full_name as string) || (meta.name as string);
+  const emailName = user.email?.split("@")[0];
+
+  // Determine if this is a renew (same plan as current) or upgrade to new tier
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("plan, full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const isRenew = prof?.plan === plan;
+  const kind: "P" | "B" | "R" = isRenew ? "R" : plan === "pro" ? "P" : "B";
+  const orderNumber = generatePlanOrderNumber(kind);
+  const userName = prof?.full_name || metaName || emailName || "SMF User";
+  const displayName = userName;
 
   try {
     const pi = await stripe.paymentIntents.create({
       amount: amount * 100, // THB → satang
       currency: "thb",
       payment_method_types: ["promptpay"],
-      description: `SMF IoT — ${PLAN_INFO[plan].name} plan × ${n} เดือน`,
+      description: `${orderNumber} — SMF IoT ${PLAN_INFO[plan].name} × ${n} เดือน`,
       metadata: {
         user_id: user.id,
         plan,
         months: String(n),
+        order_number: orderNumber,
+        is_renew: String(isRenew),
       },
     });
 
@@ -84,6 +97,10 @@ export async function createStripePromptPay(
       method: "stripe_promptpay",
       status: "pending",
       stripe_payment_intent_id: pi.id,
+      order_number: orderNumber,
+      months: n,
+      user_name: userName,
+      is_renew: isRenew,
     });
     if (dbErr) return { ok: false, error: dbErr.message };
 

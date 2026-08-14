@@ -16,6 +16,20 @@ export function generateOrderNumber(sku: SKU): string {
   return `${PREFIX[sku]}-${yyyy}${mm}${dd}-${rand}`;
 }
 
+/**
+ * Plan order number: {P|B|R}-YYYYMMDD-XXXX
+ *   P = Pro upgrade, B = Business upgrade, R = Renew (same plan)
+ * e.g. P-20260814-K3M9
+ */
+export function generatePlanOrderNumber(kind: "P" | "B" | "R"): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${kind}-${yyyy}${mm}${dd}-${rand}`;
+}
+
 export type ShippingInfo = {
   ship_name: string;
   ship_phone: string;
