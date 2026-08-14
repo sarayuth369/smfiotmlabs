@@ -50,7 +50,7 @@ export function PlanCard({
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
-          {expired ? "หมดอายุแล้วเมื่อ" : "หมดอายุ"} {formatThaiDate(expiresAt)}
+          หมดอายุ {formatThaiDate(expiresAt)}
           {daysLeft !== null && !expired && (
             <span className="opacity-70">• เหลือ {daysLeft} วัน</span>
           )}

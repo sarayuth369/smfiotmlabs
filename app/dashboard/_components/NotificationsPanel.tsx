@@ -34,7 +34,7 @@ export function NotificationsPanel({ items }: { items: NotificationItem[] }) {
             🔔
           </span>
           <div>
-            <div className="font-bold text-brand-800">การแจ้งเตือน</div>
+            <div className="font-bold text-red-600">การแจ้งเตือน</div>
             {unreadCount > 0 && (
               <div className="text-xs text-brand-700">มี {unreadCount} รายการที่ยังไม่ได้อ่าน</div>
             )}

@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: "/admin/products", label: "IoT Node Prices", mod: "products" },
   { href: "/admin/plan-orders", label: "Plan Upgrade / Renew", mod: "plan_orders" },
   { href: "/admin/orders", label: "Hardware Orders", mod: "orders" },
+  { href: "/admin/income", label: "Income", mod: "income" },
   { href: "/admin/settings", label: "System Settings", mod: "settings" },
   { href: "/admin/admin-users", label: "Admin Users", mod: "admin_users" },
 ];
