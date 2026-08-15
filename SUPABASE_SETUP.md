@@ -490,7 +490,62 @@ on conflict (key) do nothing;
 
 ---
 
-## 9. `.env.local`
+## 9. ระบบฟาร์ม (My Farms — Phase 1)
+
+```sql
+create table if not exists public.farms (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text,
+  province text,
+  district text,
+  subdistrict text,
+  area numeric(12,2),
+  area_unit text default 'ไร่' check (area_unit in ('ไร่','งาน','ตร.ว.','ตร.ม.')),
+  farm_type text,
+  latitude numeric(9,6),
+  longitude numeric(9,6),
+  archived_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists farms_user_id_idx on public.farms(user_id);
+create index if not exists farms_created_at_idx on public.farms(created_at desc);
+
+-- updated_at auto trigger
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end $$;
+
+drop trigger if exists farms_set_updated_at on public.farms;
+create trigger farms_set_updated_at before update on public.farms
+  for each row execute function public.set_updated_at();
+
+-- RLS: user เห็น/แก้/ลบ ได้เฉพาะฟาร์มของตัวเอง
+alter table public.farms enable row level security;
+
+drop policy if exists "farms_select_own" on public.farms;
+create policy "farms_select_own" on public.farms
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "farms_insert_own" on public.farms;
+create policy "farms_insert_own" on public.farms
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "farms_update_own" on public.farms;
+create policy "farms_update_own" on public.farms
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "farms_delete_own" on public.farms;
+create policy "farms_delete_own" on public.farms
+  for delete using (auth.uid() = user_id);
+```
+
+---
+
+## 10. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 

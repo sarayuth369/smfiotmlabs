@@ -27,6 +27,11 @@ export default async function DashboardPage() {
   const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
   const expiresAt = (profile?.plan_expires_at as string | null) ?? null;
 
+  const { count: farmCount } = await supabase
+    .from("farms")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user!.id);
+
   const { data: notifs } = await supabase
     .from("notifications")
     .select("id, title, message, read_at, created_at")
@@ -67,14 +72,34 @@ export default async function DashboardPage() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
         <div className="card p-6 flex flex-col">
-          <div className="text-sm font-semibold text-brand-800">ฟาร์มของฉัน</div>
-          <p className="mt-1 text-sm text-brand-900/60 flex-1">ยังไม่มีฟาร์มที่ผูกกับบัญชี</p>
-          <button
-            type="button"
-            className="mt-4 self-start rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
-          >
-            เพิ่มฟาร์ม
-          </button>
+          <div className="flex items-baseline justify-between">
+            <div className="text-sm font-semibold text-brand-800">ฟาร์มของฉัน</div>
+            <div className="text-2xl font-extrabold text-brand-800">
+              {(farmCount ?? 0).toLocaleString()}
+            </div>
+          </div>
+          <p className="mt-1 text-sm text-brand-900/60 flex-1">
+            {(farmCount ?? 0) > 0
+              ? `มี ${farmCount} ฟาร์มในบัญชีของคุณ`
+              : "ยังไม่มีฟาร์มที่ผูกกับบัญชี"}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/farms/new"
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              เพิ่มฟาร์ม
+            </Link>
+            <Link
+              href="/dashboard/farms"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
+            >
+              เปิดฟาร์ม
+            </Link>
+          </div>
         </div>
 
         <div className="card p-6 flex flex-col">
