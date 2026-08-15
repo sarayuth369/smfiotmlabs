@@ -97,6 +97,50 @@ export async function updateFarm(farmId: string, formData: FormData): Promise<vo
   redirect(`/dashboard/farms/${farmId}`);
 }
 
+export async function archiveFarm(farmId: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("farms")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", farmId)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/farms");
+  revalidatePath(`/dashboard/farms/${farmId}`);
+  redirect("/dashboard/farms");
+}
+
+export async function restoreFarm(farmId: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Re-check plan limit — restoring counts against active quota again
+  const check = await canCreateFarm(supabase, user.id);
+  if (!check.ok) throw new Error(check.reason ?? "เกินโควตาแพ็กเกจ ไม่สามารถกู้คืนได้");
+
+  const { error } = await supabase
+    .from("farms")
+    .update({ archived_at: null })
+    .eq("id", farmId)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/farms");
+  revalidatePath(`/dashboard/farms/${farmId}`);
+  redirect(`/dashboard/farms/${farmId}`);
+}
+
 export async function deleteFarm(farmId: string): Promise<void> {
   const supabase = await createClient();
   const {

@@ -75,6 +75,7 @@ export async function getUserPlan(
   };
 }
 
+/** Counts only ACTIVE farms (archived_at IS NULL) — archived farms don't count against plan limit */
 export async function getFarmUsage(
   supabase: SupabaseClient,
   userId: string
@@ -82,7 +83,8 @@ export async function getFarmUsage(
   const { count } = await supabase
     .from("farms")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("archived_at", null);
   return count ?? 0;
 }
 

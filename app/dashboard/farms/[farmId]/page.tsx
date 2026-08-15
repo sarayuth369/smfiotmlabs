@@ -17,6 +17,7 @@ type Farm = {
   longitude: number | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 };
 
 const SUBNAV = [
@@ -43,7 +44,7 @@ export default async function FarmDetailPage({
   const { data } = await supabase
     .from("farms")
     .select(
-      "id, name, description, province, district, subdistrict, area, area_unit, farm_type, latitude, longitude, created_at, updated_at"
+      "id, name, description, province, district, subdistrict, area, area_unit, farm_type, latitude, longitude, created_at, updated_at, archived_at"
     )
     .eq("id", farmId)
     .eq("user_id", user!.id)
@@ -74,6 +75,11 @@ export default async function FarmDetailPage({
             {farm.farm_type && (
               <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-brand-100 text-brand-700">
                 {farm.farm_type}
+              </span>
+            )}
+            {farm.archived_at && (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                Archived
               </span>
             )}
           </div>
