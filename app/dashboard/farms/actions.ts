@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { canCreateFarm } from "@/lib/plan-limits";
 
 const AREA_UNITS = ["ไร่", "งาน", "ตร.ว.", "ตร.ม."] as const;
 type AreaUnit = (typeof AREA_UNITS)[number];
@@ -57,6 +58,10 @@ export async function createFarm(formData: FormData): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/dashboard/farms/new");
+
+  // Server-side plan limit gate (must not trust client)
+  const check = await canCreateFarm(supabase, user.id);
+  if (!check.ok) throw new Error(check.reason ?? "เกินโควตาแพ็กเกจ");
 
   const fields = parseFarmFields(formData);
   const { data, error } = await supabase

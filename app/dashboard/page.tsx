@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
+import { getUserPlan, getFarmUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
 import { PlanCard } from "./_components/PlanCard";
 import { NotificationsPanel, type NotificationItem } from "./_components/NotificationsPanel";
 
@@ -27,10 +28,14 @@ export default async function DashboardPage() {
   const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
   const expiresAt = (profile?.plan_expires_at as string | null) ?? null;
 
-  const { count: farmCount } = await supabase
-    .from("farms")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user!.id);
+  const [userPlan, farmCount] = await Promise.all([
+    getUserPlan(supabase, user!.id),
+    getFarmUsage(supabase, user!.id),
+  ]);
+  const planLabel = formatPlanLabel(userPlan);
+  const farmPct = usagePercent(farmCount, userPlan.limits.max_farms);
+  const farmLimitLabel = formatLimit(userPlan.limits.max_farms);
+  const nodeLimitLabel = formatLimit(userPlan.limits.max_nodes);
 
   const { data: notifs } = await supabase
     .from("notifications")
@@ -64,7 +69,50 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          <PlanCard plan={plan} expiresAt={expiresAt} />
+          <PlanCard
+            plan={plan}
+            expiresAt={expiresAt}
+            planName={userPlan.name}
+            planLabel={planLabel}
+          />
+
+          {/* Usage snapshot */}
+          <div className="mt-5 grid sm:grid-cols-2 gap-3">
+            <div className="rounded-xl bg-white/10 border border-white/20 p-3">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="text-white/80 font-medium">ฟาร์ม</span>
+                <span className="text-white font-semibold">
+                  {farmCount.toLocaleString()} / {farmLimitLabel}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    userPlan.limits.max_farms === null
+                      ? "bg-white/60"
+                      : farmPct >= 100
+                        ? "bg-red-300"
+                        : farmPct >= 80
+                          ? "bg-amber-300"
+                          : "bg-white"
+                  }`}
+                  style={{ width: `${userPlan.limits.max_farms === null ? 8 : farmPct}%` }}
+                />
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/10 border border-white/20 p-3">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="text-white/80 font-medium">
+                  อุปกรณ์ IoT
+                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 text-white/85 align-middle">
+                    Soon
+                  </span>
+                </span>
+                <span className="text-white font-semibold">0 / {nodeLimitLabel}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-white/15" />
+            </div>
+          </div>
         </div>
       </section>
 

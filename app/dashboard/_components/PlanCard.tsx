@@ -9,13 +9,21 @@ import { UpgradeModal } from "@/app/pricing/_components/UpgradeModal";
 export function PlanCard({
   plan,
   expiresAt,
+  planName,
+  planLabel,
 }: {
   plan: PlanId;
   expiresAt: string | null;
+  /** DB-driven plan name (falls back to hard-coded PLAN_INFO) */
+  planName?: string;
+  /** DB-driven price label e.g. "฿499 / เดือน" */
+  planLabel?: string;
 }) {
   const [openPlan, setOpenPlan] = useState<"pro" | "business" | null>(null);
 
   const info = PLAN_INFO[plan];
+  const displayName = planName ?? info.name;
+  const displayLabel = planLabel ?? info.label;
   const canUpgrade = plan === "starter" || plan === "pro";
   const canRenew = plan === "pro" || plan === "business";
   const isEnterprise = plan === "enterprise";
@@ -30,9 +38,9 @@ export function PlanCard({
         className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${info.badgeClass}`}
       >
         <span className="w-1.5 h-1.5 rounded-full bg-current" />
-        แพ็กเกจ: {info.name}
+        แพ็กเกจ: {displayName}
         <span className="opacity-70 font-normal normal-case tracking-normal">
-          • {info.label}
+          • {displayLabel}
         </span>
       </div>
 

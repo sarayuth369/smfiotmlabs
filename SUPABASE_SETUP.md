@@ -545,7 +545,30 @@ create policy "farms_delete_own" on public.farms
 
 ---
 
-## 10. `.env.local`
+## 10. Plan Limits (Phase 1.5)
+
+เพิ่ม column max_farms / max_nodes / max_sensors ให้ตาราง `subscription_plans` (สร้างไว้แล้วใน section 7)
+
+**Convention:** `NULL = unlimited`
+
+```sql
+alter table public.subscription_plans
+  add column if not exists max_farms integer,
+  add column if not exists max_nodes integer,
+  add column if not exists max_sensors integer;
+
+-- Seed / update limits per plan
+update public.subscription_plans set max_farms = 1,    max_nodes = 1,    max_sensors = 1    where plan_id = 'starter';
+update public.subscription_plans set max_farms = 5,    max_nodes = 10,   max_sensors = 50   where plan_id = 'pro';
+update public.subscription_plans set max_farms = 20,   max_nodes = 50,   max_sensors = 200  where plan_id = 'business';
+update public.subscription_plans set max_farms = null, max_nodes = null, max_sensors = null where plan_id = 'enterprise';
+```
+
+**Security note** — RLS ของ `subscription_plans` เดิม (section 7) เปิด SELECT ให้ทุกคนอ่านได้ (จำเป็นเพราะหน้า `/pricing` public) แต่ INSERT/UPDATE/DELETE ไม่มี policy → มีเฉพาะ service_role (admin backend) เขียนได้ ผู้ใช้ปกติแก้ max_* ไม่ได้
+
+---
+
+## 11. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 

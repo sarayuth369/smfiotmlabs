@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
+import { canCreateFarm } from "@/lib/plan-limits";
+import { UsageBar } from "./_components/UsageBar";
+import { PlanLimitNotice } from "./_components/PlanLimitNotice";
 
 type Farm = {
   id: string;
@@ -20,13 +23,37 @@ export default async function MyFarmsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data } = await supabase
-    .from("farms")
-    .select("id, name, description, province, district, area, area_unit, farm_type, created_at")
-    .eq("user_id", user!.id)
-    .order("created_at", { ascending: false });
+  const [{ data }, check] = await Promise.all([
+    supabase
+      .from("farms")
+      .select("id, name, description, province, district, area, area_unit, farm_type, created_at")
+      .eq("user_id", user!.id)
+      .order("created_at", { ascending: false }),
+    canCreateFarm(supabase, user!.id),
+  ]);
 
   const farms = (data ?? []) as Farm[];
+  const atLimit = !check.ok;
+
+  const addBtnClasses = atLimit
+    ? "inline-flex items-center gap-1.5 rounded-full bg-brand-100 text-brand-700/60 font-semibold px-5 py-2.5 text-sm cursor-not-allowed"
+    : "inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2.5 text-sm transition";
+
+  const addBtn = atLimit ? (
+    <div className={addBtnClasses} title={check.reason}>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      เพิ่มฟาร์ม
+    </div>
+  ) : (
+    <Link href="/dashboard/farms/new" className={addBtnClasses}>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      เพิ่มฟาร์ม
+    </Link>
+  );
 
   return (
     <div>
@@ -41,16 +68,32 @@ export default async function MyFarmsPage() {
             จัดการฟาร์ม แปลง และอุปกรณ์ IoT ของคุณ
           </p>
         </div>
-        <Link
-          href="/dashboard/farms/new"
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2.5 text-sm transition"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          เพิ่มฟาร์ม
-        </Link>
+        {addBtn}
       </div>
+
+      {/* Usage card */}
+      <div className="card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold text-brand-800">
+            การใช้งานแพ็กเกจ{" "}
+            <span className="uppercase">{check.planName}</span>
+          </div>
+          <Link href="/pricing" className="text-xs text-brand-700 hover:text-brand-900 font-medium underline">
+            ดูแพ็กเกจ
+          </Link>
+        </div>
+        <UsageBar label="ฟาร์ม" current={check.current} limit={check.limit} />
+      </div>
+
+      {atLimit && (
+        <div className="mb-6">
+          <PlanLimitNotice
+            planName={check.planName}
+            current={check.current}
+            limit={check.limit ?? 0}
+          />
+        </div>
+      )}
 
       {farms.length === 0 ? (
         <div className="card p-10 sm:p-16 text-center">
@@ -59,15 +102,7 @@ export default async function MyFarmsPage() {
           <p className="mt-2 text-sm text-brand-900/60">
             เริ่มต้นสร้างฟาร์มแรกของคุณเพื่อจัดการแปลงปลูกและอุปกรณ์ IoT
           </p>
-          <Link
-            href="/dashboard/farms/new"
-            className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 text-sm transition"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            เพิ่มฟาร์ม
-          </Link>
+          <div className="mt-6 inline-flex">{addBtn}</div>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
