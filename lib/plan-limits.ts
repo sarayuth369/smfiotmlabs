@@ -7,7 +7,11 @@ export type PlanLimits = {
   max_zones: number | null;
   max_nodes: number | null;
   max_sensors: number | null;
+  sensor_history_days: number | null;
 };
+
+/** Feature-flag map — extend keys freely; unknown keys default to false. */
+export type PlanEntitlements = Record<string, boolean>;
 
 export type UserPlan = {
   plan_id: PlanId;
@@ -15,14 +19,22 @@ export type UserPlan = {
   price: number;
   price_note: string | null;
   limits: PlanLimits;
+  entitlements: PlanEntitlements;
 };
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 1 },
-  pro: { max_farms: 5, max_zones: 10, max_nodes: 10, max_sensors: 50 },
-  business: { max_farms: 20, max_zones: 50, max_nodes: 50, max_sensors: 200 },
-  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null },
+  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, sensor_history_days: 7 },
+  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, sensor_history_days: 90 },
+  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, sensor_history_days: 365 },
+  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, sensor_history_days: null },
+};
+
+const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
+  starter: {},
+  pro: { mqtt: true, line_notify: true, reports: true },
+  business: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true },
+  enterprise: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true },
 };
 
 const FALLBACK_META: Record<
@@ -56,12 +68,21 @@ export async function getUserPlan(
 
   const { data: row } = await supabase
     .from("subscription_plans")
-    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors")
+    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, sensor_history_days, entitlements")
     .eq("plan_id", planId)
     .maybeSingle();
 
   const meta = FALLBACK_META[planId];
   const fb = FALLBACK_LIMITS[planId];
+  const fbEnt = FALLBACK_ENTITLEMENTS[planId];
+
+  const entRaw = row?.entitlements as Record<string, unknown> | null | undefined;
+  const entitlements: PlanEntitlements = {};
+  if (entRaw && typeof entRaw === "object") {
+    for (const [k, v] of Object.entries(entRaw)) entitlements[k] = !!v;
+  } else {
+    Object.assign(entitlements, fbEnt);
+  }
 
   return {
     plan_id: planId,
@@ -73,9 +94,29 @@ export async function getUserPlan(
       max_zones: row ? (row.max_zones as number | null) : fb.max_zones,
       max_nodes: row ? (row.max_nodes as number | null) : fb.max_nodes,
       max_sensors: row ? (row.max_sensors as number | null) : fb.max_sensors,
+      sensor_history_days: row
+        ? (row.sensor_history_days as number | null)
+        : fb.sensor_history_days,
     },
+    entitlements,
   };
 }
+
+export function hasFeature(plan: UserPlan, key: string): boolean {
+  return !!plan.entitlements[key];
+}
+
+/** Well-known feature-flag keys — extend list to expose new toggles in admin UI. */
+export const KNOWN_FEATURES = [
+  { key: "mqtt", label: "MQTT" },
+  { key: "line_notify", label: "LINE Notify" },
+  { key: "ota", label: "OTA Firmware" },
+  { key: "api", label: "API Access" },
+  { key: "reports", label: "Reports" },
+  { key: "automation", label: "Automation" },
+  { key: "ai", label: "AI Analysis" },
+  { key: "priority_support", label: "Priority Support" },
+] as const;
 
 /** Counts only ACTIVE farms (archived_at IS NULL) — archived farms don't count against plan limit */
 export async function getFarmUsage(

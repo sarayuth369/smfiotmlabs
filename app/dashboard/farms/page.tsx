@@ -109,6 +109,15 @@ export default async function MyFarmsPage({
         </div>
       )}
 
+      {/* Downgrade safety: usage strictly exceeds new limit */}
+      {check.limit !== null && check.current > check.limit && view === "active" && (
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <span className="font-bold">Over Limit — </span>
+          การใช้งานปัจจุบัน ({check.current}) เกินข้อจำกัดของแพ็กเกจ {check.planName} (สูงสุด {check.limit})
+          — ข้อมูลเดิมยังคงใช้งานได้ แต่ไม่สามารถสร้างเพิ่มจนกว่าจะกลับมาอยู่ในโควตา
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="mb-6 border-b border-brand-100 flex items-center gap-1">
         <TabLink label={`ใช้งาน (${check.current})`} active={view === "active"} href="/dashboard/farms" />

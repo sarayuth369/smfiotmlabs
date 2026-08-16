@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { href: "/admin/members", label: "Users Management", mod: "members" },
   { href: "/admin/notifications", label: "Notifications", mod: "notifications" },
   { href: "/admin/pricing", label: "Subscription Plans", mod: "pricing" },
+  { href: "/admin/plan-limits", label: "Plan Limits & Features", mod: "plan_limits" },
   { href: "/admin/products", label: "IoT Node Prices", mod: "products" },
   { href: "/admin/plan-orders", label: "Plan Upgrade / Renew", mod: "plan_orders" },
   { href: "/admin/orders", label: "Hardware Orders", mod: "orders" },

@@ -812,7 +812,49 @@ create policy "sensors_delete_own" on public.sensors for delete using (
 
 ---
 
-## 14. `.env.local`
+## 14. Plan Limits &amp; Features (Admin config)
+
+เพิ่ม column `sensor_history_days` + `entitlements jsonb` ลงในตาราง `subscription_plans` (สร้างไว้ก่อนหน้าแล้ว) + seed ค่าเริ่มต้นตามสเปก
+
+```sql
+alter table public.subscription_plans
+  add column if not exists sensor_history_days integer,
+  add column if not exists entitlements jsonb default '{}'::jsonb;
+
+-- Refresh default limits + sensor_history + entitlements per plan spec
+update public.subscription_plans set
+  max_farms = 1, max_zones = 2, max_nodes = 1, max_sensors = 5,
+  sensor_history_days = 7,
+  entitlements = '{}'::jsonb
+where plan_id = 'starter';
+
+update public.subscription_plans set
+  max_farms = 5, max_zones = 20, max_nodes = 30, max_sensors = null,
+  sensor_history_days = 90,
+  entitlements = jsonb_build_object('mqtt', true, 'line_notify', true, 'reports', true)
+where plan_id = 'pro';
+
+update public.subscription_plans set
+  max_farms = 20, max_zones = 100, max_nodes = 200, max_sensors = null,
+  sensor_history_days = 365,
+  entitlements = jsonb_build_object('mqtt', true, 'line_notify', true, 'reports', true, 'ota', true, 'api', true, 'automation', true)
+where plan_id = 'business';
+
+update public.subscription_plans set
+  max_farms = null, max_zones = null, max_nodes = null, max_sensors = null,
+  sensor_history_days = null,
+  entitlements = jsonb_build_object('mqtt', true, 'line_notify', true, 'reports', true, 'ota', true, 'api', true, 'automation', true, 'ai', true, 'priority_support', true)
+where plan_id = 'enterprise';
+```
+
+**Convention:** `NULL = Unlimited` (ทุก max_* + sensor_history_days)  
+**Entitlements:** jsonb map — key/bool อิสระ, ไม่มี key = false อัตโนมัติ, เพิ่ม key ใหม่ได้โดยไม่ต้อง migrate
+
+**RLS:** ใช้ policy เดิมของ `subscription_plans` — SELECT public (จำเป็นสำหรับ /pricing), INSERT/UPDATE/DELETE เฉพาะ service_role (admin backend เท่านั้น) → user แก้ limit เองไม่ได้
+
+---
+
+## 15. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 
