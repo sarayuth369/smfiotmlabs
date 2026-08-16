@@ -50,6 +50,21 @@ export default async function ZoneDetailPage({
     zone.area !== null ? `${Number(zone.area).toLocaleString()} ${zone.area_unit ?? "ไร่"}` : "ไม่ระบุ";
   const isArchived = !!zone.archived_at;
 
+  const { data: zoneDevices } = await supabase
+    .from("iot_nodes")
+    .select("id, device_uid, device_name, status, last_seen")
+    .eq("zone_id", zoneId)
+    .eq("farm_id", farmId)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false });
+  const devices = (zoneDevices ?? []) as {
+    id: string;
+    device_uid: string;
+    device_name: string;
+    status: "online" | "offline" | "warning";
+    last_seen: string | null;
+  }[];
+
   return (
     <div>
       <div className="flex items-center gap-2 text-sm text-brand-700/70 mb-2">
@@ -128,12 +143,58 @@ export default async function ZoneDetailPage({
           </div>
 
           <div className="card p-6">
-            <h2 className="font-bold text-brand-800">อุปกรณ์ IoT ในแปลง</h2>
-            <div className="mt-4 rounded-xl border border-dashed border-brand-200 p-6 text-center text-sm text-brand-900/55">
-              <div className="text-3xl">📡</div>
-              <div className="mt-2 font-semibold text-brand-800">Coming Soon</div>
-              <div className="mt-1">ระบบ IoT Node / Sensor / Realtime จะเปิดใช้งานในเฟสถัดไป</div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-brand-800">
+                อุปกรณ์ IoT ในแปลง{" "}
+                <span className="text-sm font-normal text-brand-900/55">({devices.length})</span>
+              </h2>
+              <Link
+                href={`/dashboard/devices/new?farm_id=${farmId}&zone_id=${zoneId}`}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                เพิ่มอุปกรณ์
+              </Link>
             </div>
+            {devices.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-brand-200 p-6 text-center text-sm text-brand-900/55">
+                <div className="text-3xl">📡</div>
+                <div className="mt-2 font-semibold text-brand-800">ยังไม่มีอุปกรณ์ในแปลงนี้</div>
+                <div className="mt-1">เพิ่ม SMF IoT Node เพื่อเก็บข้อมูลจากแปลง</div>
+              </div>
+            ) : (
+              <ul className="divide-y divide-brand-100">
+                {devices.map((d) => (
+                  <li key={d.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-brand-800 truncate">{d.device_name}</div>
+                      <div className="font-mono text-xs text-brand-900/55">{d.device_uid}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          d.status === "online"
+                            ? "bg-green-100 text-green-800"
+                            : d.status === "warning"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-brand-100 text-brand-700/70"
+                        }`}
+                      >
+                        {d.status}
+                      </span>
+                      <Link
+                        href={`/dashboard/devices/${d.id}`}
+                        className="text-xs text-brand-700 hover:text-brand-900 font-medium"
+                      >
+                        เปิด →
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

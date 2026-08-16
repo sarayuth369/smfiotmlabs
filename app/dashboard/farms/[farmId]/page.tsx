@@ -45,7 +45,7 @@ export default async function FarmDetailPage({
   const farm = data as Farm | null;
   if (!farm) notFound();
 
-  const [zoneActiveRes, zoneArchivedRes] = await Promise.all([
+  const [zoneActiveRes, zoneArchivedRes, deviceActiveRes] = await Promise.all([
     supabase
       .from("zones")
       .select("id", { count: "exact", head: true })
@@ -56,14 +56,20 @@ export default async function FarmDetailPage({
       .select("id", { count: "exact", head: true })
       .eq("farm_id", farmId)
       .not("archived_at", "is", null),
+    supabase
+      .from("iot_nodes")
+      .select("id", { count: "exact", head: true })
+      .eq("farm_id", farmId)
+      .is("archived_at", null),
   ]);
   const zonesActive = zoneActiveRes.count ?? 0;
   const zonesArchived = zoneArchivedRes.count ?? 0;
+  const devicesActive = deviceActiveRes.count ?? 0;
 
   const SUBNAV: SubnavItem[] = [
     { key: "overview", label: "ภาพรวม" }, // current page
     { key: "zones", label: "แปลง / Zone", href: `/dashboard/farms/${farmId}/zones` },
-    { key: "nodes", label: "อุปกรณ์ IoT", soon: true },
+    { key: "nodes", label: "อุปกรณ์ IoT", href: `/dashboard/farms/${farmId}/devices` },
     { key: "sensors", label: "Sensors", soon: true },
     { key: "automation", label: "Automation", soon: true },
     { key: "notifications", label: "การแจ้งเตือน", soon: true },
@@ -148,38 +154,72 @@ export default async function FarmDetailPage({
         </div>
       </div>
 
-      {/* Zones KPI */}
-      <div className="card p-5 mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-2xl">
-            🌱
-          </div>
-          <div>
-            <div className="text-xs text-brand-900/55">แปลงในฟาร์มนี้</div>
-            <div className="text-2xl font-bold text-brand-800">
-              {zonesActive}{" "}
-              <span className="text-sm font-normal text-brand-900/55">
-                Active{zonesArchived > 0 && ` • ${zonesArchived} Archived`}
-              </span>
+      {/* KPI row */}
+      <div className="grid sm:grid-cols-2 gap-4 mb-5">
+        <div className="card p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-2xl">
+              🌱
+            </div>
+            <div>
+              <div className="text-xs text-brand-900/55">แปลงในฟาร์มนี้</div>
+              <div className="text-2xl font-bold text-brand-800">
+                {zonesActive}{" "}
+                <span className="text-sm font-normal text-brand-900/55">
+                  Active{zonesArchived > 0 && ` • ${zonesArchived} Archived`}
+                </span>
+              </div>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/dashboard/farms/${farmId}/zones/new`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              เพิ่มแปลง
+            </Link>
+            <Link
+              href={`/dashboard/farms/${farmId}/zones`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
+            >
+              จัดการ
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/dashboard/farms/${farmId}/zones/new`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
-          >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            เพิ่มแปลง
-          </Link>
-          <Link
-            href={`/dashboard/farms/${farmId}/zones`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
-          >
-            จัดการแปลง
-          </Link>
+
+        <div className="card p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center text-2xl">
+              📡
+            </div>
+            <div>
+              <div className="text-xs text-brand-900/55">อุปกรณ์ IoT ในฟาร์มนี้</div>
+              <div className="text-2xl font-bold text-brand-800">
+                {devicesActive}{" "}
+                <span className="text-sm font-normal text-brand-900/55">Active</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/dashboard/devices/new?farm_id=${farmId}`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 transition"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              เพิ่มอุปกรณ์
+            </Link>
+            <Link
+              href={`/dashboard/farms/${farmId}/devices`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
+            >
+              จัดการ
+            </Link>
+          </div>
         </div>
       </div>
 

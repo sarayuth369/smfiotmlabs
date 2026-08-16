@@ -640,7 +640,82 @@ create policy "zones_delete_own" on public.zones
 
 ---
 
-## 12. `.env.local`
+## 12. IoT Nodes (Phase 4)
+
+### Bump `max_nodes` limit for STARTER
+
+Phase 1.5 seeded starter=1. Phase 4 spec = 2:
+
+```sql
+update public.subscription_plans set max_nodes = 2 where plan_id = 'starter';
+-- pro=10, business=50, enterprise=null are already correct from Phase 1.5
+```
+
+### Create `iot_nodes` table + RLS
+
+```sql
+create table if not exists public.iot_nodes (
+  id uuid primary key default gen_random_uuid(),
+  device_uid text unique not null,
+  device_name text not null,
+  farm_id uuid not null references public.farms(id) on delete cascade,
+  zone_id uuid references public.zones(id) on delete set null,
+  device_type text,
+  model text,
+  status text not null default 'offline' check (status in ('online','offline','warning')),
+  firmware_version text,
+  last_seen timestamptz,
+  archived_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists iot_nodes_farm_id_idx on public.iot_nodes(farm_id);
+create index if not exists iot_nodes_zone_id_idx on public.iot_nodes(zone_id);
+create index if not exists iot_nodes_farm_active_idx on public.iot_nodes(farm_id) where archived_at is null;
+create index if not exists iot_nodes_device_uid_idx on public.iot_nodes(device_uid);
+
+drop trigger if exists iot_nodes_set_updated_at on public.iot_nodes;
+create trigger iot_nodes_set_updated_at before update on public.iot_nodes
+  for each row execute function public.set_updated_at();
+
+alter table public.iot_nodes enable row level security;
+
+-- RLS: ownership via parent farm (both USING for old-row and WITH CHECK for new-row on UPDATE
+-- to block moving a device into another user's farm)
+
+drop policy if exists "iot_nodes_select_own" on public.iot_nodes;
+create policy "iot_nodes_select_own" on public.iot_nodes for select using (
+  exists (select 1 from public.farms f where f.id = iot_nodes.farm_id and f.user_id = auth.uid())
+);
+
+drop policy if exists "iot_nodes_insert_own" on public.iot_nodes;
+create policy "iot_nodes_insert_own" on public.iot_nodes for insert with check (
+  exists (select 1 from public.farms f where f.id = iot_nodes.farm_id and f.user_id = auth.uid())
+);
+
+drop policy if exists "iot_nodes_update_own" on public.iot_nodes;
+create policy "iot_nodes_update_own" on public.iot_nodes for update
+  using (
+    exists (select 1 from public.farms f where f.id = iot_nodes.farm_id and f.user_id = auth.uid())
+  )
+  with check (
+    exists (select 1 from public.farms f where f.id = iot_nodes.farm_id and f.user_id = auth.uid())
+  );
+
+drop policy if exists "iot_nodes_delete_own" on public.iot_nodes;
+create policy "iot_nodes_delete_own" on public.iot_nodes for delete using (
+  exists (select 1 from public.farms f where f.id = iot_nodes.farm_id and f.user_id = auth.uid())
+);
+```
+
+**Cascades:** ลบ farm → devices หายอัตโนมัติ (`on delete cascade`) — ลบ zone → device.zone_id ถูก set null (`on delete set null`)
+
+**MQTT convention (พร้อมใช้อนาคต):** `smfiot/{device_uid}/telemetry` | `.../status` | `.../command` — ยังไม่ connect ในเฟสนี้
+
+---
+
+## 13. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 

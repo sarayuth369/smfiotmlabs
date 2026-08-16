@@ -168,6 +168,50 @@ export async function canCreateZone(
   return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
 }
 
+/** Counts only ACTIVE nodes across ALL farms of a user. */
+export async function getNodeUsage(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data: farmIdsRow } = await supabase
+    .from("farms")
+    .select("id")
+    .eq("user_id", userId);
+  const farmIds = (farmIdsRow ?? []).map((f) => f.id as string);
+  if (farmIds.length === 0) return 0;
+  const { count } = await supabase
+    .from("iot_nodes")
+    .select("id", { count: "exact", head: true })
+    .in("farm_id", farmIds)
+    .is("archived_at", null);
+  return count ?? 0;
+}
+
+export async function canCreateNode(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<LimitCheck> {
+  const [plan, current] = await Promise.all([
+    getUserPlan(supabase, userId),
+    getNodeUsage(supabase, userId),
+  ]);
+  const limit = plan.limits.max_nodes;
+  if (limit === null) {
+    return { ok: true, current, limit: null, planId: plan.plan_id, planName: plan.name };
+  }
+  if (current >= limit) {
+    return {
+      ok: false,
+      current,
+      limit,
+      planId: plan.plan_id,
+      planName: plan.name,
+      reason: `คุณใช้จำนวนอุปกรณ์ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
+    };
+  }
+  return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
+}
+
 export function formatPlanLabel(plan: UserPlan): string {
   if (plan.plan_id === "starter" && plan.price === 0) return "ฟรี";
   if (plan.plan_id === "enterprise") return plan.price_note ?? "Contact Sales";

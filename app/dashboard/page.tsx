@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
-import { getUserPlan, getFarmUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
+import { getUserPlan, getFarmUsage, getNodeUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
 import { PlanCard } from "./_components/PlanCard";
 import { NotificationsPanel, type NotificationItem } from "./_components/NotificationsPanel";
 
@@ -28,13 +28,15 @@ export default async function DashboardPage() {
   const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
   const expiresAt = (profile?.plan_expires_at as string | null) ?? null;
 
-  const [userPlan, farmCount] = await Promise.all([
+  const [userPlan, farmCount, nodeCount] = await Promise.all([
     getUserPlan(supabase, user!.id),
     getFarmUsage(supabase, user!.id),
+    getNodeUsage(supabase, user!.id),
   ]);
   const planLabel = formatPlanLabel(userPlan);
   const farmPct = usagePercent(farmCount, userPlan.limits.max_farms);
   const farmLimitLabel = formatLimit(userPlan.limits.max_farms);
+  const nodePct = usagePercent(nodeCount, userPlan.limits.max_nodes);
   const nodeLimitLabel = formatLimit(userPlan.limits.max_nodes);
 
   const { data: notifs } = await supabase
@@ -102,15 +104,25 @@ export default async function DashboardPage() {
             </div>
             <div className="rounded-xl bg-white/10 border border-white/20 p-3">
               <div className="flex items-baseline justify-between text-xs">
-                <span className="text-white/80 font-medium">
-                  อุปกรณ์ IoT
-                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 text-white/85 align-middle">
-                    Soon
-                  </span>
+                <span className="text-white/80 font-medium">อุปกรณ์ IoT</span>
+                <span className="text-white font-semibold">
+                  {nodeCount.toLocaleString()} / {nodeLimitLabel}
                 </span>
-                <span className="text-white font-semibold">0 / {nodeLimitLabel}</span>
               </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-white/15" />
+              <div className="mt-1.5 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    userPlan.limits.max_nodes === null
+                      ? "bg-white/60"
+                      : nodePct >= 100
+                        ? "bg-red-300"
+                        : nodePct >= 80
+                          ? "bg-amber-300"
+                          : "bg-white"
+                  }`}
+                  style={{ width: `${userPlan.limits.max_nodes === null ? 8 : nodePct}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -151,18 +163,25 @@ export default async function DashboardPage() {
         </div>
 
         <div className="card p-6 flex flex-col">
-          <div className="text-sm font-semibold text-brand-800">อุปกรณ์ (SMF IoT Node)</div>
-          <p className="mt-1 text-sm text-brand-900/60 flex-1">ยังไม่มีอุปกรณ์ที่เชื่อมต่อ</p>
+          <div className="flex items-baseline justify-between">
+            <div className="text-sm font-semibold text-brand-800">อุปกรณ์ (SMF IoT Node)</div>
+            <div className="text-2xl font-extrabold text-brand-800">{nodeCount.toLocaleString()}</div>
+          </div>
+          <p className="mt-1 text-sm text-brand-900/60 flex-1">
+            {nodeCount > 0
+              ? `เชื่อมต่ออุปกรณ์แล้ว ${nodeCount} ตัว`
+              : "ยังไม่มีอุปกรณ์ที่เชื่อมต่อ"}
+          </p>
           <div className="mt-4 flex items-center gap-1.5 flex-nowrap">
-            <button
-              type="button"
+            <Link
+              href="/dashboard/devices/new"
               className="inline-flex items-center gap-1 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-semibold px-2.5 py-1.5 transition whitespace-nowrap"
             >
               <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14" />
               </svg>
               เพิ่มอุปกรณ์
-            </button>
+            </Link>
             <Link
               href="/iot-nodes"
               className="inline-flex items-center gap-1 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-[11px] font-semibold px-2.5 py-1.5 transition whitespace-nowrap"
