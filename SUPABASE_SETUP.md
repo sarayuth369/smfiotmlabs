@@ -568,7 +568,79 @@ update public.subscription_plans set max_farms = null, max_nodes = null, max_sen
 
 ---
 
-## 11. `.env.local`
+## 11. Zones (Phase 3)
+
+### Add `max_zones` column + seed limits
+
+```sql
+alter table public.subscription_plans
+  add column if not exists max_zones integer;
+
+update public.subscription_plans set max_zones = 2    where plan_id = 'starter';
+update public.subscription_plans set max_zones = 10   where plan_id = 'pro';
+update public.subscription_plans set max_zones = 50   where plan_id = 'business';
+update public.subscription_plans set max_zones = null where plan_id = 'enterprise';
+```
+
+### Create `zones` table + RLS (owner-scoped via parent farm)
+
+```sql
+create table if not exists public.zones (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references public.farms(id) on delete cascade,
+  name text not null,
+  description text,
+  area numeric(12,2),
+  area_unit text default 'ไร่' check (area_unit in ('ไร่','งาน','ตร.ว.','ตร.ม.')),
+  crop_type text,
+  planting_date date,
+  expected_harvest_date date,
+  archived_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists zones_farm_id_idx on public.zones(farm_id);
+create index if not exists zones_farm_active_idx on public.zones(farm_id) where archived_at is null;
+
+drop trigger if exists zones_set_updated_at on public.zones;
+create trigger zones_set_updated_at before update on public.zones
+  for each row execute function public.set_updated_at();
+
+alter table public.zones enable row level security;
+
+-- RLS: user เห็น/แก้/ลบ zone ได้เฉพาะฟาร์มของตัวเอง (ownership เช็คผ่าน farms table)
+drop policy if exists "zones_select_own" on public.zones;
+create policy "zones_select_own" on public.zones
+  for select using (
+    exists (select 1 from public.farms f where f.id = zones.farm_id and f.user_id = auth.uid())
+  );
+
+drop policy if exists "zones_insert_own" on public.zones;
+create policy "zones_insert_own" on public.zones
+  for insert with check (
+    exists (select 1 from public.farms f where f.id = zones.farm_id and f.user_id = auth.uid())
+  );
+
+drop policy if exists "zones_update_own" on public.zones;
+create policy "zones_update_own" on public.zones
+  for update using (
+    exists (select 1 from public.farms f where f.id = zones.farm_id and f.user_id = auth.uid())
+  );
+
+drop policy if exists "zones_delete_own" on public.zones;
+create policy "zones_delete_own" on public.zones
+  for delete using (
+    exists (select 1 from public.farms f where f.id = zones.farm_id and f.user_id = auth.uid())
+  );
+```
+
+**Cascade:** ลบ farm → zones หายอัตโนมัติ (`on delete cascade`)
+**Convention:** `archived_at IS NULL` = active
+
+---
+
+## 12. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 
