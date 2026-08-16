@@ -45,6 +45,22 @@ export default async function FarmDetailPage({
   const farm = data as Farm | null;
   if (!farm) notFound();
 
+  // Fetch active device ids for this farm first (needed for sensor count join)
+  const { data: farmDeviceRows } = await supabase
+    .from("iot_nodes")
+    .select("id")
+    .eq("farm_id", farmId)
+    .is("archived_at", null);
+  const farmDeviceIds = (farmDeviceRows ?? []).map((r) => r.id as string);
+  const sensorCountRes = farmDeviceIds.length
+    ? await supabase
+        .from("sensors")
+        .select("id", { count: "exact", head: true })
+        .in("device_id", farmDeviceIds)
+        .is("archived_at", null)
+    : { count: 0 };
+  const sensorsActive = sensorCountRes.count ?? 0;
+
   const [zoneActiveRes, zoneArchivedRes, deviceActiveRes] = await Promise.all([
     supabase
       .from("zones")
@@ -199,7 +215,9 @@ export default async function FarmDetailPage({
               <div className="text-xs text-brand-900/55">อุปกรณ์ IoT ในฟาร์มนี้</div>
               <div className="text-2xl font-bold text-brand-800">
                 {devicesActive}{" "}
-                <span className="text-sm font-normal text-brand-900/55">Active</span>
+                <span className="text-sm font-normal text-brand-900/55">
+                  Devices • {sensorsActive} Sensors
+                </span>
               </div>
             </div>
           </div>

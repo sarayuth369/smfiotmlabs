@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
+import { canCreateSensor } from "@/lib/plan-limits";
+import { sensorTypeIcon, sensorTypeLabel } from "@/lib/sensor-types";
 
 type Device = {
   id: string;
@@ -29,7 +31,7 @@ const STATUS_CLS: Record<Device["status"], string> = {
 
 const SUBNAV = [
   { key: "overview", label: "Overview", active: true },
-  { key: "sensors", label: "Sensors", soon: true },
+  { key: "sensors", label: "Sensors" }, // now live — anchor to #sensors section
   { key: "control", label: "Control", soon: true },
   { key: "firmware", label: "Firmware", soon: true },
   { key: "mqtt", label: "MQTT", soon: true },
@@ -88,6 +90,31 @@ export default async function DeviceDetailPage({
 
   const isArchived = !!raw.archived_at;
 
+  // Fetch sensors + plan check in parallel
+  const [{ data: sensorsData }, sensorCheck, archivedSensorRes] = await Promise.all([
+    supabase
+      .from("sensors")
+      .select("id, name, sensor_type, unit, channel, status, archived_at")
+      .eq("device_id", deviceId)
+      .is("archived_at", null)
+      .order("created_at", { ascending: false }),
+    canCreateSensor(supabase, user!.id),
+    supabase
+      .from("sensors")
+      .select("id", { count: "exact", head: true })
+      .eq("device_id", deviceId)
+      .not("archived_at", "is", null),
+  ]);
+  const sensors = (sensorsData ?? []) as {
+    id: string;
+    name: string;
+    sensor_type: string;
+    unit: string | null;
+    channel: string | null;
+    status: "active" | "inactive";
+  }[];
+  const archivedSensorCount = archivedSensorRes.count ?? 0;
+
   return (
     <div>
       <div className="flex items-center gap-2 text-sm text-brand-700/70 mb-2">
@@ -124,22 +151,35 @@ export default async function DeviceDetailPage({
       {/* Sub-nav */}
       <div className="border-b border-brand-100 mb-6 overflow-x-auto">
         <div className="flex items-center gap-1 min-w-max">
-          {SUBNAV.map((n) => (
-            <div
-              key={n.key}
-              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
-                n.active ? "text-brand-800 border-b-2 border-brand-600" : "text-brand-900/40"
-              }`}
-              title={n.soon ? "เร็ว ๆ นี้" : undefined}
-            >
-              {n.label}
-              {n.soon && (
-                <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-600 align-middle">
-                  Soon
-                </span>
-              )}
-            </div>
-          ))}
+          {SUBNAV.map((n) => {
+            const isLink = n.key === "sensors";
+            const cls = `px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
+              n.active
+                ? "text-brand-800 border-b-2 border-brand-600"
+                : isLink
+                  ? "text-brand-800 hover:text-brand-600"
+                  : "text-brand-900/40"
+            }`;
+            const content = (
+              <>
+                {n.label}
+                {n.soon && (
+                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-600 align-middle">
+                    Soon
+                  </span>
+                )}
+              </>
+            );
+            return isLink ? (
+              <a key={n.key} href="#sensors" className={cls}>
+                {content}
+              </a>
+            ) : (
+              <div key={n.key} className={cls} title={n.soon ? "เร็ว ๆ นี้" : undefined}>
+                {content}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -224,6 +264,20 @@ export default async function DeviceDetailPage({
 
         <aside className="space-y-4">
           <div className="card p-5">
+            <div className="text-xs text-brand-900/55 mb-2">Sensor Usage (บัญชี)</div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-bold text-brand-800">
+                {sensorCheck.current.toLocaleString()}
+              </span>
+              <span className="text-sm text-brand-900/60">
+                / {sensorCheck.limit === null ? "ไม่จำกัด" : sensorCheck.limit.toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-1 text-xs text-brand-900/50 uppercase">
+              แพ็กเกจ {sensorCheck.planName}
+            </div>
+          </div>
+          <div className="card p-5">
             <div className="text-xs text-brand-900/55">ลงทะเบียนเมื่อ</div>
             <div className="font-semibold text-brand-800">{formatThaiDate(raw.created_at)}</div>
           </div>
@@ -237,6 +291,98 @@ export default async function DeviceDetailPage({
           </div>
         </aside>
       </div>
+
+      {/* Sensors section */}
+      <section id="sensors" className="mt-8 card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-bold text-brand-800">
+              Sensors{" "}
+              <span className="text-sm font-normal text-brand-900/55">
+                ({sensors.length} active{archivedSensorCount > 0 && ` • ${archivedSensorCount} archived`})
+              </span>
+            </h2>
+            <p className="text-xs text-brand-900/55 mt-0.5">
+              Sensor ที่ผูกกับอุปกรณ์นี้
+            </p>
+          </div>
+          {isArchived ? (
+            <div className="text-xs text-brand-900/50">อุปกรณ์เก็บถาวรอยู่ — กู้คืนก่อนเพิ่ม Sensor</div>
+          ) : sensorCheck.ok ? (
+            <Link
+              href={`/dashboard/devices/${deviceId}/sensors/new`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 transition"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              เพิ่ม Sensor
+            </Link>
+          ) : (
+            <div
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 text-brand-700/60 text-xs font-semibold px-4 py-2 cursor-not-allowed"
+              title={sensorCheck.reason}
+            >
+              + เพิ่ม Sensor
+            </div>
+          )}
+        </div>
+
+        {sensors.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-brand-200 p-8 text-center">
+            <div className="text-4xl">📊</div>
+            <div className="mt-2 font-semibold text-brand-800">ยังไม่มี Sensor</div>
+            <p className="mt-1 text-sm text-brand-900/60">
+              เพิ่ม Sensor เพื่อเตรียมเชื่อมต่อข้อมูลจากอุปกรณ์
+            </p>
+          </div>
+        ) : (
+          <ul className="grid sm:grid-cols-2 gap-3">
+            {sensors.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-xl border border-border p-4 hover:border-brand-300 transition"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-brand-800 truncate">
+                      {sensorTypeIcon(s.sensor_type)} {s.name}
+                    </div>
+                    <div className="text-xs text-brand-900/55 mt-0.5">
+                      {sensorTypeLabel(s.sensor_type)}
+                      {s.unit && ` • ${s.unit}`}
+                      {s.channel && ` • Ch: ${s.channel}`}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      s.status === "active"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-brand-100 text-brand-700/70"
+                    }`}
+                  >
+                    {s.status}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href={`/dashboard/devices/${deviceId}/sensors/${s.id}`}
+                    className="text-xs rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold px-3 py-1.5 transition"
+                  >
+                    เปิด
+                  </Link>
+                  <Link
+                    href={`/dashboard/devices/${deviceId}/sensors/${s.id}/edit`}
+                    className="text-xs rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 font-semibold px-3 py-1.5 transition"
+                  >
+                    ตั้งค่า
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

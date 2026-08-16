@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
-import { getUserPlan, getFarmUsage, getNodeUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
+import { getUserPlan, getFarmUsage, getNodeUsage, getSensorUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
 import { PlanCard } from "./_components/PlanCard";
 import { NotificationsPanel, type NotificationItem } from "./_components/NotificationsPanel";
 
@@ -28,16 +28,19 @@ export default async function DashboardPage() {
   const plan = ((profile?.plan as PlanId) ?? "starter") as PlanId;
   const expiresAt = (profile?.plan_expires_at as string | null) ?? null;
 
-  const [userPlan, farmCount, nodeCount] = await Promise.all([
+  const [userPlan, farmCount, nodeCount, sensorCount] = await Promise.all([
     getUserPlan(supabase, user!.id),
     getFarmUsage(supabase, user!.id),
     getNodeUsage(supabase, user!.id),
+    getSensorUsage(supabase, user!.id),
   ]);
   const planLabel = formatPlanLabel(userPlan);
   const farmPct = usagePercent(farmCount, userPlan.limits.max_farms);
   const farmLimitLabel = formatLimit(userPlan.limits.max_farms);
   const nodePct = usagePercent(nodeCount, userPlan.limits.max_nodes);
   const nodeLimitLabel = formatLimit(userPlan.limits.max_nodes);
+  const sensorPct = usagePercent(sensorCount, userPlan.limits.max_sensors);
+  const sensorLimitLabel = formatLimit(userPlan.limits.max_sensors);
 
   const { data: notifs } = await supabase
     .from("notifications")
@@ -79,7 +82,7 @@ export default async function DashboardPage() {
           />
 
           {/* Usage snapshot */}
-          <div className="mt-5 grid sm:grid-cols-2 gap-3">
+          <div className="mt-5 grid sm:grid-cols-3 gap-3">
             <div className="rounded-xl bg-white/10 border border-white/20 p-3">
               <div className="flex items-baseline justify-between text-xs">
                 <span className="text-white/80 font-medium">ฟาร์ม</span>
@@ -121,6 +124,28 @@ export default async function DashboardPage() {
                           : "bg-white"
                   }`}
                   style={{ width: `${userPlan.limits.max_nodes === null ? 8 : nodePct}%` }}
+                />
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/10 border border-white/20 p-3">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="text-white/80 font-medium">Sensors</span>
+                <span className="text-white font-semibold">
+                  {sensorCount.toLocaleString()} / {sensorLimitLabel}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    userPlan.limits.max_sensors === null
+                      ? "bg-white/60"
+                      : sensorPct >= 100
+                        ? "bg-red-300"
+                        : sensorPct >= 80
+                          ? "bg-amber-300"
+                          : "bg-white"
+                  }`}
+                  style={{ width: `${userPlan.limits.max_sensors === null ? 8 : sensorPct}%` }}
                 />
               </div>
             </div>

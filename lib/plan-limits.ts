@@ -212,6 +212,56 @@ export async function canCreateNode(
   return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
 }
 
+/** Counts ACTIVE sensors across ALL devices in ALL farms of a user. */
+export async function getSensorUsage(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data: farmIdsRow } = await supabase
+    .from("farms")
+    .select("id")
+    .eq("user_id", userId);
+  const farmIds = (farmIdsRow ?? []).map((f) => f.id as string);
+  if (farmIds.length === 0) return 0;
+  const { data: nodeIdsRow } = await supabase
+    .from("iot_nodes")
+    .select("id")
+    .in("farm_id", farmIds);
+  const nodeIds = (nodeIdsRow ?? []).map((n) => n.id as string);
+  if (nodeIds.length === 0) return 0;
+  const { count } = await supabase
+    .from("sensors")
+    .select("id", { count: "exact", head: true })
+    .in("device_id", nodeIds)
+    .is("archived_at", null);
+  return count ?? 0;
+}
+
+export async function canCreateSensor(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<LimitCheck> {
+  const [plan, current] = await Promise.all([
+    getUserPlan(supabase, userId),
+    getSensorUsage(supabase, userId),
+  ]);
+  const limit = plan.limits.max_sensors;
+  if (limit === null) {
+    return { ok: true, current, limit: null, planId: plan.plan_id, planName: plan.name };
+  }
+  if (current >= limit) {
+    return {
+      ok: false,
+      current,
+      limit,
+      planId: plan.plan_id,
+      planName: plan.name,
+      reason: `คุณใช้จำนวน Sensor ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
+    };
+  }
+  return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
+}
+
 export function formatPlanLabel(plan: UserPlan): string {
   if (plan.plan_id === "starter" && plan.price === 0) return "ฟรี";
   if (plan.plan_id === "enterprise") return plan.price_note ?? "Contact Sales";

@@ -715,7 +715,104 @@ create policy "iot_nodes_delete_own" on public.iot_nodes for delete using (
 
 ---
 
-## 13. `.env.local`
+## 13. Sensors (Phase 5)
+
+### Bump `max_sensors` per plan spec
+
+Phase 1.5 seeded starter=1, business=200. Phase 5 spec = 10 / 50 / 250 / unlimited:
+
+```sql
+update public.subscription_plans set max_sensors = 10   where plan_id = 'starter';
+update public.subscription_plans set max_sensors = 50   where plan_id = 'pro';
+update public.subscription_plans set max_sensors = 250  where plan_id = 'business';
+update public.subscription_plans set max_sensors = null where plan_id = 'enterprise';
+```
+
+### Create `sensors` table + RLS
+
+```sql
+create table if not exists public.sensors (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  name text not null,
+  sensor_type text not null check (sensor_type in ('temperature','humidity','soil_moisture','light','npk','ph','ec','co2')),
+  unit text,
+  description text,
+  channel text,
+  status text not null default 'active' check (status in ('active','inactive')),
+  archived_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists sensors_device_id_idx on public.sensors(device_id);
+create index if not exists sensors_device_active_idx on public.sensors(device_id) where archived_at is null;
+
+-- Duplicate guard: prevent 2 ACTIVE sensors of same type+channel on same device.
+-- Allows same type on different channels (e.g. multi-channel soil moisture probe)
+-- and allows a new one after the old is archived.
+create unique index if not exists sensors_device_type_channel_unique
+  on public.sensors (device_id, sensor_type, coalesce(channel, ''))
+  where archived_at is null;
+
+drop trigger if exists sensors_set_updated_at on public.sensors;
+create trigger sensors_set_updated_at before update on public.sensors
+  for each row execute function public.set_updated_at();
+
+alter table public.sensors enable row level security;
+
+-- RLS via device → farm → user chain
+drop policy if exists "sensors_select_own" on public.sensors;
+create policy "sensors_select_own" on public.sensors for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensors.device_id and f.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "sensors_insert_own" on public.sensors;
+create policy "sensors_insert_own" on public.sensors for insert with check (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensors.device_id and f.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "sensors_update_own" on public.sensors;
+create policy "sensors_update_own" on public.sensors for update
+  using (
+    exists (
+      select 1 from public.iot_nodes n
+      join public.farms f on f.id = n.farm_id
+      where n.id = sensors.device_id and f.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.iot_nodes n
+      join public.farms f on f.id = n.farm_id
+      where n.id = sensors.device_id and f.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "sensors_delete_own" on public.sensors;
+create policy "sensors_delete_own" on public.sensors for delete using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensors.device_id and f.user_id = auth.uid()
+  )
+);
+```
+
+**Cascade:** ลบ device → sensors หายอัตโนมัติ  
+**Duplicate:** ป้องกันสร้าง sensor type + channel เดียวกันซ้ำใน device เดียว (Active เท่านั้น — archived ไม่นับ)
+
+---
+
+## 14. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 
