@@ -1325,6 +1325,299 @@ TELEMETRY_INGEST_SECRET=<same as web>
 
 ---
 
+## 19. Firmware + OTA + Automation Engine (Phase 10)
+
+Foundation for firmware version management, OTA update jobs, device configuration overlay, and rule-based automation engine (sensor threshold + schedule).
+
+**Design:**
+- `firmwares` — versioned binaries (Supabase Storage bucket `firmwares`, path stored, admin-only write)
+- `ota_jobs` — audit trail with state machine; server creates + worker/device updates status
+- `device_configs` — key/value config sent to device via MQTT `config` topic
+- `automation_rules` — declarative rule (trigger + condition + action + cooldown)
+- `automation_logs` — every rule evaluation (executed / skipped / failed) with reason
+
+Rule engine runs **inside `/api/telemetry/ingest`** after each reading batch — no separate cron for sensor triggers. Schedule triggers = daily cron scan of `next_run_at`.
+
+```sql
+-- ============================================================
+-- 19.1  Extend iot_nodes with hardware_model for firmware compat
+-- ============================================================
+alter table public.iot_nodes
+  add column if not exists hardware_model text;
+
+create index if not exists iot_nodes_hardware_model_idx
+  on public.iot_nodes(hardware_model) where hardware_model is not null;
+
+-- ============================================================
+-- 19.2  firmwares
+-- ============================================================
+create table if not exists public.firmwares (
+  id uuid primary key default gen_random_uuid(),
+  version text not null,                    -- semver: 1.2.3
+  name text not null,
+  hardware_model text not null,             -- must match iot_nodes.hardware_model
+  hardware_revision text,
+  file_path text not null,                  -- Supabase Storage path in bucket 'firmwares'
+  file_size bigint not null check (file_size > 0),
+  sha256 text not null check (length(sha256) = 64),
+  release_notes text,
+  status text not null default 'draft'
+    check (status in ('draft','testing','published','deprecated','revoked')),
+  is_latest boolean not null default false,
+  channel text not null default 'stable' check (channel in ('stable','beta')),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- One version per (hardware_model, version) — no duplicates
+create unique index if not exists firmwares_model_version_uniq
+  on public.firmwares (hardware_model, version);
+
+-- Only 1 is_latest=true per (hardware_model, channel)
+create unique index if not exists firmwares_latest_per_channel_uniq
+  on public.firmwares (hardware_model, channel)
+  where is_latest = true;
+
+create index if not exists firmwares_status_idx on public.firmwares(status);
+create index if not exists firmwares_channel_idx on public.firmwares(channel);
+
+drop trigger if exists firmwares_set_updated_at on public.firmwares;
+create trigger firmwares_set_updated_at before update on public.firmwares
+  for each row execute function public.set_updated_at();
+
+alter table public.firmwares enable row level security;
+
+-- User can SELECT published firmwares matching their devices' hardware_model
+drop policy if exists "firmwares_select_published" on public.firmwares;
+create policy "firmwares_select_published" on public.firmwares for select using (
+  status in ('published','deprecated') and (
+    hardware_model in (
+      select distinct n.hardware_model
+      from public.iot_nodes n
+      join public.farms f on f.id = n.farm_id
+      where f.user_id = auth.uid() and n.hardware_model is not null
+    )
+  )
+);
+-- INSERT/UPDATE/DELETE = service_role only (admin backend)
+
+-- ============================================================
+-- 19.3  ota_jobs
+-- ============================================================
+create table if not exists public.ota_jobs (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  firmware_id uuid not null references public.firmwares(id) on delete restrict,
+  requested_by uuid references auth.users(id) on delete set null,
+  status text not null default 'pending'
+    check (status in ('pending','downloading','installing','rebooting','verifying','completed','failed','timeout','cancelled')),
+  from_version text,
+  to_version text not null,
+  progress smallint check (progress is null or (progress between 0 and 100)),
+  error_message text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Prevent duplicate active job per device
+create unique index if not exists ota_jobs_active_uniq
+  on public.ota_jobs (device_id)
+  where status in ('pending','downloading','installing','rebooting','verifying');
+
+create index if not exists ota_jobs_device_created_idx on public.ota_jobs(device_id, created_at desc);
+create index if not exists ota_jobs_status_idx on public.ota_jobs(status);
+
+drop trigger if exists ota_jobs_set_updated_at on public.ota_jobs;
+create trigger ota_jobs_set_updated_at before update on public.ota_jobs
+  for each row execute function public.set_updated_at();
+
+alter table public.ota_jobs enable row level security;
+
+drop policy if exists "ota_jobs_select_own" on public.ota_jobs;
+create policy "ota_jobs_select_own" on public.ota_jobs for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = ota_jobs.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE = service_role only (created via server action, updated by worker)
+
+-- ============================================================
+-- 19.4  device_configs
+-- ============================================================
+create table if not exists public.device_configs (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  key text not null,                        -- e.g. 'telemetry_interval', 'timezone', 'sensor.temp.threshold'
+  value jsonb not null,
+  applied_at timestamptz,                   -- set when device acks
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists device_configs_device_key_uniq
+  on public.device_configs (device_id, key);
+create index if not exists device_configs_device_idx on public.device_configs(device_id);
+
+drop trigger if exists device_configs_set_updated_at on public.device_configs;
+create trigger device_configs_set_updated_at before update on public.device_configs
+  for each row execute function public.set_updated_at();
+
+alter table public.device_configs enable row level security;
+
+drop policy if exists "device_configs_select_own" on public.device_configs;
+create policy "device_configs_select_own" on public.device_configs for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = device_configs.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE/DELETE = service_role only (via server action)
+
+-- ============================================================
+-- 19.5  automation_rules
+-- ============================================================
+create table if not exists public.automation_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  farm_id uuid references public.farms(id) on delete cascade,
+  zone_id uuid references public.zones(id) on delete cascade,
+  device_id uuid references public.iot_nodes(id) on delete cascade,
+  sensor_id uuid references public.sensors(id) on delete cascade,
+  name text not null,
+  enabled boolean not null default true,
+  trigger_type text not null check (trigger_type in ('sensor_value','schedule','device_status')),
+  trigger_config jsonb not null,            -- {sensor_type,channel,operator,value} OR {cron,timezone}
+  action_type text not null check (action_type in ('command','notification','both')),
+  action_config jsonb not null,             -- {command,payload} OR {message,channel}
+  cooldown_seconds integer not null default 300 check (cooldown_seconds >= 0),
+  last_triggered_at timestamptz,
+  next_run_at timestamptz,                  -- for schedule triggers
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists automation_rules_user_idx on public.automation_rules(user_id);
+create index if not exists automation_rules_device_enabled_idx
+  on public.automation_rules(device_id, enabled) where enabled = true;
+create index if not exists automation_rules_sensor_enabled_idx
+  on public.automation_rules(sensor_id, enabled) where enabled = true and trigger_type = 'sensor_value';
+create index if not exists automation_rules_next_run_idx
+  on public.automation_rules(next_run_at) where enabled = true and next_run_at is not null;
+
+drop trigger if exists automation_rules_set_updated_at on public.automation_rules;
+create trigger automation_rules_set_updated_at before update on public.automation_rules
+  for each row execute function public.set_updated_at();
+
+alter table public.automation_rules enable row level security;
+
+drop policy if exists "automation_rules_select_own" on public.automation_rules;
+create policy "automation_rules_select_own" on public.automation_rules for select
+  using (user_id = auth.uid());
+
+drop policy if exists "automation_rules_insert_own" on public.automation_rules;
+create policy "automation_rules_insert_own" on public.automation_rules for insert
+  with check (user_id = auth.uid());
+
+drop policy if exists "automation_rules_update_own" on public.automation_rules;
+create policy "automation_rules_update_own" on public.automation_rules for update
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists "automation_rules_delete_own" on public.automation_rules;
+create policy "automation_rules_delete_own" on public.automation_rules for delete
+  using (user_id = auth.uid());
+
+-- ============================================================
+-- 19.6  automation_logs
+-- ============================================================
+create table if not exists public.automation_logs (
+  id uuid primary key default gen_random_uuid(),
+  rule_id uuid not null references public.automation_rules(id) on delete cascade,
+  device_id uuid references public.iot_nodes(id) on delete set null,
+  sensor_id uuid references public.sensors(id) on delete set null,
+  status text not null check (status in ('triggered','executed','skipped','failed')),
+  trigger_value jsonb,                      -- {value, unit, timestamp}
+  action_result jsonb,                      -- {command_id,mqtt_ok,error}
+  skip_reason text,                         -- 'cooldown','disabled','device_offline','plan_restriction','safety'
+  error_message text,
+  executed_at timestamptz not null default now()
+);
+
+create index if not exists automation_logs_rule_executed_idx
+  on public.automation_logs(rule_id, executed_at desc);
+create index if not exists automation_logs_device_executed_idx
+  on public.automation_logs(device_id, executed_at desc) where device_id is not null;
+
+alter table public.automation_logs enable row level security;
+
+drop policy if exists "automation_logs_select_own" on public.automation_logs;
+create policy "automation_logs_select_own" on public.automation_logs for select using (
+  exists (
+    select 1 from public.automation_rules r
+    where r.id = automation_logs.rule_id and r.user_id = auth.uid()
+  )
+);
+-- INSERT = service_role only (rule engine)
+```
+
+**KNOWN_FEATURES to extend** in [lib/plan-limits.ts](lib/plan-limits.ts):
+```ts
+{ key: "automation_advanced", label: "Advanced Automation (AND/OR + schedule)" },
+{ key: "safety_controls", label: "Safety Runtime Limits" },
+```
+(entries `ota`, `automation` already exist)
+
+**Rule config shape (jsonb)**
+
+Sensor trigger:
+```json
+{
+  "sensor_type": "soil_moisture",
+  "channel": null,
+  "operator": "<",
+  "value": 30
+}
+```
+
+Schedule trigger:
+```json
+{ "cron": "0 6 * * *", "timezone": "Asia/Bangkok" }
+```
+
+Command action:
+```json
+{ "command": "relay_on", "payload": { "channel": 1 }, "auto_off_seconds": 1800 }
+```
+
+Notification action:
+```json
+{ "message": "ดินแห้ง — ปั๊มทำงาน", "level": "warning" }
+```
+
+**Safety runtime enforcement** — actions with `auto_off_seconds` insert a follow-up `device_commands` row scheduled for `now() + N seconds`. Worker cron flushes ready commands. Manual override recorded via `device_commands.metadata.manual_override=true` — takes priority over automation triggers within N minutes.
+
+**Conflict priority (in rule engine):**
+```
+Safety shutdown > Manual override > Automation > Schedule
+```
+Rule engine skips if any higher-priority command sent within cooldown window.
+
+**Storage bucket** — create in Supabase Dashboard → Storage:
+- Bucket name: `firmwares`
+- Public: **NO**
+- Policies: none (service_role only) — user downloads via signed URL from server action
+- Max file size: 8 MB
+
+**Rerun-safe:** all `if not exists` — run entire Section 19 anytime.
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:

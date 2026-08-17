@@ -10,6 +10,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { evaluateReadingAgainstRules } from "@/lib/automation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -140,11 +141,37 @@ export async function POST(req: Request) {
     .update({ last_seen: new Date().toISOString(), status: "online" })
     .eq("id", device.id);
 
+  // Run automation rule engine — evaluate each reading against sensor_value rules
+  let automation = { evaluated: 0, executed: 0, skipped: 0, failed: 0 };
+  for (const row of rows) {
+    const sensor = sensors.find((s) => s.id === row.sensor_id);
+    if (!sensor) continue;
+    try {
+      const r = await evaluateReadingAgainstRules(admin, {
+        sensor_id: row.sensor_id,
+        device_id: row.device_id,
+        device_uid: body.device_uid,
+        sensor_type: sensor.sensor_type as string,
+        channel: (sensor.channel as string | null) ?? null,
+        value: row.value,
+        occurred_at: row.occurred_at,
+      });
+      automation.evaluated += r.evaluated;
+      automation.executed += r.executed;
+      automation.skipped += r.skipped;
+      automation.failed += r.failed;
+    } catch (e) {
+      // Never let rule-engine failure poison ingestion
+      console.warn("[telemetry.ingest] rule engine error", (e as Error).message);
+    }
+  }
+
   return json({
     ok: true,
     device_uid: body.device_uid,
     inserted,
     rejected: rejected.length,
     rejectedDetail: rejected.slice(0, 5),
+    automation,
   });
 }

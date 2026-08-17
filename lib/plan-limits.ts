@@ -112,6 +112,8 @@ export const KNOWN_FEATURES = [
   { key: "api", label: "API Access" },
   { key: "reports", label: "Reports" },
   { key: "automation", label: "Automation" },
+  { key: "automation_advanced", label: "Advanced Automation (AND/OR + schedule)" },
+  { key: "safety_controls", label: "Safety Runtime Limits" },
   { key: "ai", label: "AI Analysis" },
   { key: "priority_support", label: "Priority Support" },
 ] as const;
