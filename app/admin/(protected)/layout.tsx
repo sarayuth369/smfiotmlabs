@@ -9,6 +9,7 @@ type NavItem = { href: string; label: string; mod: Parameters<typeof canAccess>[
 const NAV: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", mod: "dashboard" },
   { href: "/admin/members", label: "Users Management", mod: "members" },
+  { href: "/admin/devices", label: "IoT Devices", mod: "devices" },
   { href: "/admin/notifications", label: "Notifications", mod: "notifications" },
   { href: "/admin/pricing", label: "Subscription Plans", mod: "pricing" },
   { href: "/admin/plan-limits", label: "Plan Limits & Features", mod: "plan_limits" },

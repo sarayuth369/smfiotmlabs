@@ -1119,6 +1119,212 @@ Note: column-level restrict on user UPDATE requires a trigger. Server actions ne
 
 ---
 
+## 18. Device Telemetry & Commands (Phase 9)
+
+MQTT + telemetry ingestion + command dispatch schema. Reuse `iot_nodes` (Phase 4). Add per-device MQTT credentials (hashed), time-series `sensor_readings`, `device_commands` audit, `device_events`.
+
+**Prereq — HiveMQ Cloud broker** (or equivalent MQTT broker). Ingestion happens through a **separate worker service** (not Vercel — serverless lifecycle wrong for persistent MQTT). Worker POSTs validated batches to `/api/telemetry/ingest` (HMAC-signed). Command dispatch: web API inserts `device_commands` row + optionally publishes via HiveMQ HTTP REST API (short-lived request-scoped).
+
+```sql
+-- ============================================================
+-- 18.1  Extend iot_nodes for MQTT identity
+-- ============================================================
+alter table public.iot_nodes
+  add column if not exists mqtt_client_id text
+    generated always as ('smf_device_' || device_uid) stored,
+  add column if not exists hardware_version text,
+  add column if not exists is_disabled boolean not null default false;
+
+create unique index if not exists iot_nodes_mqtt_client_id_uniq
+  on public.iot_nodes (mqtt_client_id);
+
+-- ============================================================
+-- 18.2  device_credentials — per-device MQTT username/password (hashed)
+-- ============================================================
+create table if not exists public.device_credentials (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  mqtt_username text not null unique,
+  mqtt_password_hash text not null,          -- bcrypt/argon2 hash — never plaintext
+  mqtt_password_prefix text,                 -- first 4 chars for display "abcd****"
+  created_at timestamptz not null default now(),
+  rotated_at timestamptz,
+  revoked_at timestamptz,
+  created_by uuid references auth.users(id) on delete set null
+);
+
+create index if not exists device_credentials_device_idx on public.device_credentials(device_id);
+create unique index if not exists device_credentials_active_uniq
+  on public.device_credentials(device_id)
+  where revoked_at is null;
+
+alter table public.device_credentials enable row level security;
+
+-- User can SEE credential metadata (username/prefix/dates) for own devices — NEVER hash
+drop policy if exists "device_credentials_select_own" on public.device_credentials;
+create policy "device_credentials_select_own" on public.device_credentials for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = device_credentials.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE/DELETE = service_role only (server actions via createAdminClient)
+
+-- ============================================================
+-- 18.3  sensor_readings — time-series telemetry
+-- ============================================================
+create table if not exists public.sensor_readings (
+  id uuid primary key default gen_random_uuid(),
+  sensor_id uuid not null references public.sensors(id) on delete cascade,
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  value numeric not null,
+  unit text,
+  occurred_at timestamptz not null,          -- device-reported time
+  received_at timestamptz not null default now(),
+  quality text not null default 'good' check (quality in ('good','bad','estimated')),
+  message_id text,                            -- optional idempotency key from device
+  metadata jsonb
+);
+
+-- Query indexes: latest-N per sensor, per-device range scan
+create index if not exists sensor_readings_sensor_occurred_idx
+  on public.sensor_readings(sensor_id, occurred_at desc);
+create index if not exists sensor_readings_device_occurred_idx
+  on public.sensor_readings(device_id, occurred_at desc);
+
+-- Idempotency: if worker resends same (sensor_id, message_id) skip via ON CONFLICT
+create unique index if not exists sensor_readings_msg_uniq
+  on public.sensor_readings(sensor_id, message_id)
+  where message_id is not null;
+
+alter table public.sensor_readings enable row level security;
+
+drop policy if exists "sensor_readings_select_own" on public.sensor_readings;
+create policy "sensor_readings_select_own" on public.sensor_readings for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensor_readings.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT = service_role only (worker via /api/telemetry/ingest)
+
+-- ============================================================
+-- 18.4  device_commands — command audit trail
+-- ============================================================
+create table if not exists public.device_commands (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete set null,
+  command text not null,                     -- e.g. 'ping','relay_on','relay_off','ota_update'
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending'
+    check (status in ('pending','sent','acknowledged','failed','timeout')),
+  requested_at timestamptz not null default now(),
+  sent_at timestamptz,
+  acknowledged_at timestamptz,
+  response jsonb,
+  error_message text
+);
+
+create index if not exists device_commands_device_requested_idx
+  on public.device_commands(device_id, requested_at desc);
+create index if not exists device_commands_status_idx
+  on public.device_commands(status) where status in ('pending','sent');
+
+alter table public.device_commands enable row level security;
+
+drop policy if exists "device_commands_select_own" on public.device_commands;
+create policy "device_commands_select_own" on public.device_commands for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = device_commands.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE = service_role only (server action + worker ack updates)
+
+-- ============================================================
+-- 18.5  device_events — connect/disconnect/error audit
+-- ============================================================
+create table if not exists public.device_events (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  event_type text not null,                  -- 'connected','disconnected','error','firmware_report','low_battery','relay_changed'
+  payload jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists device_events_device_occurred_idx
+  on public.device_events(device_id, occurred_at desc);
+create index if not exists device_events_type_idx on public.device_events(event_type);
+
+alter table public.device_events enable row level security;
+
+drop policy if exists "device_events_select_own" on public.device_events;
+create policy "device_events_select_own" on public.device_events for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = device_events.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT = service_role only (worker)
+```
+
+**Ingestion contract** — worker POSTs to `/api/telemetry/ingest`:
+
+```
+POST /api/telemetry/ingest
+X-Ingest-Signature: hex(hmac-sha256(TELEMETRY_INGEST_SECRET, body))
+Content-Type: application/json
+
+{
+  "device_uid": "SMF-A1B2C3D4",
+  "occurred_at": "2026-08-17T10:00:00Z",
+  "readings": [
+    { "sensor_type": "temperature", "channel": null, "value": 28.5, "unit": "°C", "message_id": "uuid-1" },
+    { "sensor_type": "soil_moisture", "channel": "ch1", "value": 45, "unit": "%", "message_id": "uuid-2" }
+  ]
+}
+```
+
+Server: resolve device_uid → iot_nodes.id, resolve `(sensor_type, channel)` → sensors.id, insert `sensor_readings` (idempotent via message_id), update `iot_nodes.last_seen + status='online'`.
+
+**Command contract** — web POSTs to `/api/devices/[deviceId]/command`:
+
+```
+POST /api/devices/{id}/command
+Cookie: (Supabase auth session)
+
+{ "command": "ping", "payload": {} }
+```
+
+Server: verify user owns device via farm chain, insert `device_commands(status='pending')`, publish MQTT `smfiot/{device_uid}/command` via HiveMQ HTTP REST or defer to worker to poll.
+
+**Environment variables (Vercel + Worker):**
+
+```
+# Vercel Web
+TELEMETRY_INGEST_SECRET=<random 64 hex>     # HMAC key shared with worker
+HIVEMQ_HTTP_API_URL=https://<cluster>.hivemq.cloud/rest
+HIVEMQ_HTTP_API_TOKEN=<hivemq api token>    # for command publish
+
+# Worker (Railway/Render — separate deploy)
+SUPABASE_URL=<same as web>
+SUPABASE_SERVICE_ROLE_KEY=<same as web>
+HIVEMQ_BROKER_URL=tls://<cluster>.hivemq.cloud:8883
+HIVEMQ_WORKER_USERNAME=<worker credential>
+HIVEMQ_WORKER_PASSWORD=<worker credential>
+TELEMETRY_INGEST_URL=https://smfiot.bkknex.com/api/telemetry/ingest
+TELEMETRY_INGEST_SECRET=<same as web>
+```
+
+**Rerun-safe:** all `if not exists`, `on conflict` — run entire Section 18 anytime.
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
