@@ -1035,7 +1035,91 @@ on conflict do nothing;
 
 ---
 
-## 16. `.env.local`
+## 16. Subscription Lifecycle (Phase 8)
+
+Extend `profiles` with grace period + auto-renew flag, add `subscription_events` audit log. Reuses existing `profiles.plan` + `plan_expires_at` as active subscription state (no duplicate `subscriptions` table).
+
+```sql
+-- 16.1 Extend profiles for lifecycle
+alter table public.profiles
+  add column if not exists grace_period_end timestamptz,
+  add column if not exists auto_renew boolean not null default false,
+  add column if not exists sub_notified_expiring_7 timestamptz,
+  add column if not exists sub_notified_expiring_1 timestamptz,
+  add column if not exists sub_notified_expired timestamptz;
+
+-- Index for the cron scan (only rows that can transition)
+create index if not exists profiles_plan_expires_active_idx
+  on public.profiles (plan_expires_at)
+  where plan_expires_at is not null and plan <> 'starter';
+
+-- 16.2 Audit log for subscription lifecycle events
+create table if not exists public.subscription_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  event_type text not null check (event_type in (
+    'created','activated','renewed','upgraded','downgraded',
+    'cancelled','expired','grace_started','grace_ended',
+    'payment_paid','payment_failed','admin_grant','admin_extend'
+  )),
+  from_plan text,
+  to_plan text,
+  actor_type text not null default 'system' check (actor_type in ('system','user','admin','stripe')),
+  actor_id uuid,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists subscription_events_user_idx
+  on public.subscription_events (user_id, created_at desc);
+create index if not exists subscription_events_type_idx
+  on public.subscription_events (event_type, created_at desc);
+
+alter table public.subscription_events enable row level security;
+
+-- User sees own events
+drop policy if exists "subscription_events_select_own" on public.subscription_events;
+create policy "subscription_events_select_own"
+  on public.subscription_events for select
+  using (auth.uid() = user_id);
+
+-- INSERT/UPDATE/DELETE = service_role only (no policy = default deny)
+```
+
+**Grace period policy:** 7 days after `plan_expires_at`. Configurable via `SUBSCRIPTION_GRACE_DAYS` env (default 7).
+
+**Cron endpoint:** `POST /api/cron/subscription-check` (Vercel Cron runs daily). Protected by `CRON_SECRET` header.
+
+**Lifecycle transitions handled by cron:**
+- `plan_expires_at - now() ≤ 7 days` AND not notified → send `subscription_expiring` notification + mark `sub_notified_expiring_7`
+- `plan_expires_at - now() ≤ 1 day` AND not notified → send urgent notification + mark `sub_notified_expiring_1`
+- `plan_expires_at < now()` AND `grace_period_end IS NULL` → set `grace_period_end = plan_expires_at + 7d`, notify `subscription_expired`, log `grace_started`
+- `grace_period_end < now()` → set `plan = 'starter'`, clear `plan_expires_at` + `grace_period_end`, notify + log `downgraded`
+
+**Effective plan resolution** (see `lib/subscription.ts`):
+- `active` = `plan_expires_at IS NULL` (starter/enterprise) OR `plan_expires_at > now()`
+- `grace` = `plan_expires_at < now() ≤ grace_period_end`
+- `expired` = `grace_period_end < now()` → returns `starter` limits (server-enforced via `canCreate*`)
+
+**RLS:** users cannot modify `profiles.plan` or `plan_expires_at` (existing `profiles_update_own` policy WITH CHECK enforcement — those columns should never be updatable client-side; Stripe webhook uses service_role bypass). Verify with:
+
+```sql
+-- Existing profiles_update_own allows column-level anything. Restrict:
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (
+    auth.uid() = id
+    -- plan and plan_expires_at are set by stripe webhook (service_role bypass) or admin actions only
+    -- but Postgres RLS can't restrict column-level here; guard in server actions instead
+  );
+```
+Note: column-level restrict on user UPDATE requires a trigger. Server actions never expose plan-mutation from client — enforced by app code.
+
+---
+
+## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 
@@ -1049,6 +1133,10 @@ SUPABASE_SERVICE_ROLE_KEY=<service_role secret>
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Phase 8 — subscription lifecycle cron
+CRON_SECRET=<random 32+ chars, protects /api/cron/*>
+SUBSCRIPTION_GRACE_DAYS=7
 ```
 
 **Vercel** — เพิ่ม env vars ทั้งหมดข้างต้นที่ Project → Settings → Environment Variables (ครบทั้ง Production + Preview + Development) แล้ว Redeploy

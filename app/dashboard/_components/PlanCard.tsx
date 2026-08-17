@@ -101,10 +101,16 @@ export function PlanCard({
       )}
 
       <Link
+        href="/dashboard/billing"
+        className="text-xs text-white/70 hover:text-white underline underline-offset-2"
+      >
+        ประวัติการชำระเงิน
+      </Link>
+      <Link
         href="/pricing"
         className="text-xs text-white/70 hover:text-white underline underline-offset-2"
       >
-        ดูรายละเอียดแพ็กเกจทั้งหมด
+        ดูแพ็กเกจทั้งหมด
       </Link>
 
       <UpgradeModal open={!!openPlan} plan={openPlan} onClose={() => setOpenPlan(null)} />

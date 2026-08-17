@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlanId } from "@/lib/plans";
+import { getSubscriptionState } from "@/lib/subscription";
 
 /** null = unlimited */
 export type PlanLimits = {
@@ -51,20 +52,17 @@ export function isValidPlanId(x: string | null | undefined): x is PlanId {
   return x === "starter" || x === "pro" || x === "business" || x === "enterprise";
 }
 
-/** Get user's plan (from profiles.plan, fallback = starter) + limits from DB */
+/**
+ * Get user's EFFECTIVE plan + limits from DB.
+ * If subscription is past grace period, returns `starter` regardless of `profiles.plan`
+ * — enforced server-side, cannot be bypassed by client.
+ */
 export async function getUserPlan(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UserPlan> {
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("plan")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const planId: PlanId = isValidPlanId(prof?.plan as string | null | undefined)
-    ? (prof!.plan as PlanId)
-    : "starter";
+  const sub = await getSubscriptionState(supabase, userId);
+  const planId: PlanId = sub.effective_plan;
 
   const { data: row } = await supabase
     .from("subscription_plans")
