@@ -854,7 +854,188 @@ where plan_id = 'enterprise';
 
 ---
 
-## 15. `.env.local`
+## 15. Customer Identity & Entitlements (Special Phase 2.1)
+
+Abstraction layer เหนือ `profiles` เพื่อรองรับ 1 ผู้ใช้จริง = หลาย `auth.users` account ในอนาคต + สิทธิ์ Starter ฟรี 1 สิทธิ์ต่อ 1 ตัวตนจริง (anti-abuse)
+
+**สำคัญ:** section นี้เพิ่ม schema + RLS เท่านั้น — **ยังไม่** เปลี่ยน signup / auto-grant / UI (จะทำใน 2.2+). Migration idempotent — รันซ้ำได้ปลอดภัย
+
+```sql
+-- ============================================================
+-- 15.1  customer_identities
+-- ============================================================
+-- 1 identity = 1 ตัวตนจริง (ผูก email เดียว, 1 primary user).
+-- profiles ยังคงเป็น per-account record; identity เป็น abstraction เหนือ.
+create table if not exists public.customer_identities (
+  id uuid primary key default gen_random_uuid(),
+  primary_user_id uuid unique references auth.users(id) on delete set null,
+  email text not null,
+  email_verified boolean not null default false,
+  phone text,
+  phone_verified boolean not null default false,
+  status text not null default 'active' check (status in ('active','suspended','merged')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Email เป็น natural key ของ identity (case-insensitive) — 1 identity ต่อ 1 email
+create unique index if not exists customer_identities_email_lower_uniq
+  on public.customer_identities (lower(email));
+
+create index if not exists customer_identities_status_idx
+  on public.customer_identities (status);
+
+drop trigger if exists customer_identities_set_updated_at on public.customer_identities;
+create trigger customer_identities_set_updated_at
+  before update on public.customer_identities
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- 15.2  profiles.customer_identity_id (link column)
+-- ============================================================
+alter table public.profiles
+  add column if not exists customer_identity_id uuid
+  references public.customer_identities(id) on delete set null;
+
+create index if not exists profiles_customer_identity_id_idx
+  on public.profiles (customer_identity_id);
+
+-- ============================================================
+-- 15.3  customer_entitlements
+-- ============================================================
+-- Starter (และ entitlement อื่น ๆ ในอนาคต) unique ต่อ identity เมื่อ status='active'.
+-- Partial unique index กัน race condition ระดับ DB (concurrent claim → 23505).
+create table if not exists public.customer_entitlements (
+  id uuid primary key default gen_random_uuid(),
+  customer_identity_id uuid not null references public.customer_identities(id) on delete cascade,
+  entitlement_type text not null check (entitlement_type in ('starter')),
+  status text not null default 'active' check (status in ('active','revoked','expired')),
+  claimed_at timestamptz not null default now(),
+  expires_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Race-safe uniqueness: 1 active entitlement per (identity, type)
+create unique index if not exists customer_entitlements_active_uniq
+  on public.customer_entitlements (customer_identity_id, entitlement_type)
+  where status = 'active';
+
+create index if not exists customer_entitlements_identity_idx
+  on public.customer_entitlements (customer_identity_id);
+create index if not exists customer_entitlements_type_status_idx
+  on public.customer_entitlements (entitlement_type, status);
+
+drop trigger if exists customer_entitlements_set_updated_at on public.customer_entitlements;
+create trigger customer_entitlements_set_updated_at
+  before update on public.customer_entitlements
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- 15.4  RLS — customer_identities
+-- ============================================================
+alter table public.customer_identities enable row level security;
+
+-- User อ่านได้เฉพาะ identity ของตัวเอง (ผ่าน profiles.customer_identity_id)
+drop policy if exists "customer_identities_select_own" on public.customer_identities;
+create policy "customer_identities_select_own"
+  on public.customer_identities for select
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and p.customer_identity_id = public.customer_identities.id
+    )
+  );
+
+-- ห้าม user INSERT / UPDATE / DELETE โดยตรง (service_role bypass ทั้งหมด)
+-- ไม่มี policy = ไม่มีสิทธิ์ (RLS default deny)
+
+-- ============================================================
+-- 15.5  RLS — customer_entitlements
+-- ============================================================
+alter table public.customer_entitlements enable row level security;
+
+-- User อ่านได้เฉพาะ entitlement ที่ผูกกับ identity ของตัวเอง
+drop policy if exists "customer_entitlements_select_own" on public.customer_entitlements;
+create policy "customer_entitlements_select_own"
+  on public.customer_entitlements for select
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and p.customer_identity_id = public.customer_entitlements.customer_identity_id
+    )
+  );
+
+-- ห้าม user INSERT / UPDATE / DELETE โดยตรง — Claim ทำผ่าน server action + service_role เท่านั้น
+-- ไม่มี policy = ไม่มีสิทธิ์ (RLS default deny)
+
+-- ============================================================
+-- 15.6  Backfill — existing users (idempotent, safe)
+-- ============================================================
+-- (a) สร้าง identity 1 ตัวต่อ profile ที่ยังไม่มี identity, email = profile.email
+insert into public.customer_identities (primary_user_id, email, email_verified, phone, status)
+select
+  p.id,
+  p.email,
+  coalesce(au.email_confirmed_at is not null, false),
+  p.phone,
+  'active'
+from public.profiles p
+join auth.users au on au.id = p.id
+where p.customer_identity_id is null
+  and p.email is not null
+on conflict (primary_user_id) do nothing;
+
+-- (b) Link profile.customer_identity_id (จับคู่ผ่าน primary_user_id)
+update public.profiles p
+set customer_identity_id = ci.id
+from public.customer_identities ci
+where p.customer_identity_id is null
+  and ci.primary_user_id = p.id;
+
+-- (c) Seed Starter entitlement สำหรับ profile ที่มี plan='starter' อยู่แล้ว
+--     (Pro/Business/Enterprise ไม่ต้องเพราะไม่ใช้ Starter entitlement — เก็บสิทธิ์เดิมทั้งหมด)
+insert into public.customer_entitlements (customer_identity_id, entitlement_type, status, claimed_at, metadata)
+select
+  p.customer_identity_id,
+  'starter',
+  'active',
+  coalesce(p.created_at, now()),
+  jsonb_build_object('source', 'backfill_2_1', 'legacy_plan', p.plan)
+from public.profiles p
+where p.customer_identity_id is not null
+  and p.plan = 'starter'
+on conflict do nothing;
+-- ↑ ถูก block โดย partial unique index หากมี active starter อยู่แล้ว = idempotent
+```
+
+**Schema summary**
+
+| Table | Columns | Key constraints |
+|-------|---------|-----------------|
+| `customer_identities` | id, primary_user_id, email, email_verified, phone, phone_verified, status, timestamps | UNIQUE `primary_user_id`, UNIQUE `lower(email)` |
+| `profiles.customer_identity_id` | (new nullable FK) | ON DELETE SET NULL |
+| `customer_entitlements` | id, customer_identity_id, entitlement_type, status, claimed_at, expires_at, metadata, timestamps | Partial UNIQUE `(identity, type) WHERE status='active'` |
+
+**RLS summary**
+
+- `customer_identities` — SELECT own only (via profiles link). INSERT/UPDATE/DELETE = service_role only
+- `customer_entitlements` — SELECT own only (via identity → profile chain). INSERT/UPDATE/DELETE = service_role only
+- Client จะไม่สามารถ claim starter ด้วย SQL ตรง — ต้องผ่าน server action (Phase 2.2)
+
+**Preserved**
+
+- `subscription_plans` / `profiles.plan` / Stripe flow / `canCreate*` gates / farms / zones / iot_nodes / sensors — **ไม่แตะทั้งหมด**
+- Auto-grant starter (default `profiles.plan='starter'`) — **ยังคงเดิม**, จะเปลี่ยนใน Phase 2.2
+
+**Rerun-safe:** `if not exists` + `on conflict do nothing` + partial unique — รันซ้ำได้ ไม่สร้าง duplicate
+
+---
+
+## 16. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
 
