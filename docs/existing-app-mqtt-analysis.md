@@ -132,9 +132,11 @@ This is **single-tenant by design**. Cannot host multiple ESP32s on the same bro
 
 ## 10. ESP32 Firmware Source
 
-- **NOT present** in Flutter project
-- Referenced in comments: `firmware/main_board/include/mqtt_topics.h` and `firmware/main_board/include/config.h` — external repo
-- Firmware version reporting: not visible in current topic list — no `firmware_version` field in any known payload
+- **FOUND** at `D:\ArduinoProjects\ESP32 S3 N16R8\firmware\main_board\` (PlatformIO)
+- Full verified analysis: [esp32-firmware-analysis.md](esp32-firmware-analysis.md)
+- **Firmware ALREADY on HiveMQ** — broker migration done
+- **Payload formats byte-identical** to Flutter models (Flutter comments say "MUST stay identical to firmware")
+- Firmware version reporting: not currently in `publishDeviceStatus()` payload — recommend adding
 
 ## 11. Publish behavior
 

@@ -24,14 +24,16 @@
 
 ## Critical Gaps (must resolve before ESP32 test)
 
-**G1 — Broker mismatch** — legacy ESP32 talks to `broker.emqx.io`, SMF Web talks to HiveMQ. **Cannot bridge without firmware change or MQTT bridge broker.**
+**G1 — Broker mismatch** — ~~legacy ESP32 talks to `broker.emqx.io`~~ **RESOLVED** after firmware inspection.
 
-**Options:**
-- **A. Reflash ESP32** to point at HiveMQ (TLS + credentials) — 1-time change, cleanest
-- **B. Run local MQTT bridge** (Mosquitto with bridge mode) `broker.emqx.io` ↔ `HiveMQ` — no firmware change but adds infra
-- **C. Temporary migration** — change Flutter App broker setting → HiveMQ, keep ESP32 on `broker.emqx.io`, add a second app-side bridge (won't work — ESP32 can't reach HiveMQ)
+**Actual state (verified from `firmware/main_board/include/config.h`):**
+- ESP32 firmware **ALREADY on HiveMQ** — `MQTT_HOST = c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud:8883`
+- Uses shared credential `smfiot:Smfiot4556#` (🔴 leaked in git — see esp32-firmware-analysis.md §3)
+- Flutter App default is still `broker.emqx.io` (user overrides via Settings)
 
-**Recommended: A**. Reflash ESP32 once with HiveMQ credentials. Then legacy topic pattern still works — just different broker.
+**Action:** Flutter App user must change broker Setting → HiveMQ credential to match ESP32. No firmware reflash needed for connectivity.
+
+**Follow-up (before real production):** rotate HiveMQ credential + per-device provisioning (currently 1 credential = all devices).
 
 **G2 — Topic namespace collision** — `farm/temp` is not device-scoped. If 2 ESP32s connect, they overwrite each other.
 

@@ -55,16 +55,21 @@ values (
 ```
 Or use server action `regenerateDeviceCredential(deviceId)` (not yet implemented — TODO Phase 12 UI).
 
-### 4. Reflash ESP32
+### 4. ESP32 firmware (verified — no reflash needed for basic test)
 
-See [esp32-mqtt-integration-spec.md](esp32-mqtt-integration-spec.md) — 5 firmware constants to change:
-- `MQTT_HOST` = HiveMQ cluster URL
-- `MQTT_PORT` = 8883
-- `MQTT_USERNAME` = device_uid
-- `MQTT_PASSWORD` = plaintext from step 3
-- Bundle CA cert
+Firmware **already configured for HiveMQ** — see [esp32-firmware-analysis.md](esp32-firmware-analysis.md).
 
-Flash + power on ESP32.
+- MQTT_HOST already = HiveMQ cluster
+- MQTT_PORT = 8883 (TLS)
+- Credential `smfiot:Smfiot4556#` currently shared across all devices — works for single-device test
+
+**Just power on the ESP32.** It connects to HiveMQ, publishes `farm/*` topics with existing credential. Worker sees messages via same broker.
+
+**Reflash needed ONLY for:**
+- Rotating leaked credential (recommended before production)
+- Per-device credentials (multi-device deployment)
+- Adding firmware_version to status payload
+- Adding device UID prefix to topics (multi-device)
 
 ### 5. Verify Flutter App still works (regression)
 

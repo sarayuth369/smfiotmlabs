@@ -1,47 +1,68 @@
 # ESP32 Firmware ↔ SMF Web Integration Spec
 
-**Status:** ESP32 firmware source not in Flutter project. This spec describes minimal changes to existing firmware so it works with SMF Web via HiveMQ, while preserving the legacy Flutter App.
+**Status:** Firmware source located at `D:\ArduinoProjects\ESP32 S3 N16R8\firmware\main_board\` — see [esp32-firmware-analysis.md](esp32-firmware-analysis.md) for verified findings.
 
-## Change 1 — Broker migration (REQUIRED)
+**Key finding:** Firmware **ALREADY on HiveMQ**. Broker migration = done. Below describes RECOMMENDED (not required) firmware improvements before production.
 
-Legacy broker: `broker.emqx.io:1883` (public, plaintext)
-New broker: HiveMQ Cloud (TLS, per-device auth)
+## Change 1 — Broker migration ✅ DONE
 
-**Firmware changes:**
+Firmware already uses HiveMQ TLS (verified in `config.h`):
 ```cpp
-// Before
-const char* MQTT_HOST = "broker.emqx.io";
-const int   MQTT_PORT = 1883;
-
-// After
-const char* MQTT_HOST = "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud";
-const int   MQTT_PORT = 8883;
-const char* MQTT_USERNAME = "SMF-A1B2C3D4";       // matches iot_nodes.device_uid + device_credentials.mqtt_username
-const char* MQTT_PASSWORD = "<32-byte password>";  // from device_credentials, shown once at generate
-const char* MQTT_CA_CERT  = "-----BEGIN CERTIFICATE-----\n..."; // ISRG Root X1 (bundled)
+#define MQTT_HOST     "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud"
+#define MQTT_PORT     8883
+#define MQTT_USER     "smfiot"          // ⚠ hardcoded + shared — see Change 1a
+#define MQTT_PASSWORD "Smfiot4556#"     // ⚠ leaked in git — rotate!
 ```
 
-Add TLS setup:
+TLS via `WiFiClientSecure::setInsecure()` — encrypted but cert not validated. Upgrade to `setCACert()` recommended (Change 1b).
+
+## Change 1a — Rotate leaked credential (CRITICAL, DO NOW)
+
+`smfiot:Smfiot4556#` is in `config.h` git-tracked. Anyone with repo access has broker admin.
+
+Steps:
+1. HiveMQ Dashboard → Access Management → delete `smfiot` credential
+2. Create new credential (or better: per-device credentials — see Change 1c)
+3. Update firmware `config.h` with new values
+4. Move `MQTT_USER` + `MQTT_PASSWORD` to `secrets.h` (gitignore) or PlatformIO env
+5. Reflash all deployed ESP32s
+
+## Change 1b — TLS cert validation (recommended)
+
+Replace `setInsecure()` with `setCACert()` — prevents MITM:
 ```cpp
-WiFiClientSecure secureClient;
-secureClient.setCACert(MQTT_CA_CERT);
-PubSubClient mqtt(secureClient);
-mqtt.setServer(MQTT_HOST, MQTT_PORT);
+// Add to config.h:
+extern const char* HIVEMQ_CA_CERT;
+
+// New file: secrets/hivemq_ca.h
+const char* HIVEMQ_CA_CERT = R"CERT(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+... (ISRG Root X1, ~1.4KB)
+-----END CERTIFICATE-----
+)CERT";
+
+// In mqtt_handler.cpp, replace wifiClient.setInsecure() with:
+wifiClient.setCACert(HIVEMQ_CA_CERT);
 ```
 
-Connect with credentials:
+## Change 1c — Per-device credentials (before multi-device production)
+
+Currently 1 credential for all ESP32s = single point of failure. Better:
+- Each ESP32 has unique username = `device_uid` (e.g. `SMF-A1B2C3D4`)
+- Password generated via SMF `generateDeviceCredential()` (Phase 9)
+- HiveMQ Access Management: create N credentials, one per unit
+- ACL: each device can only publish/subscribe its own topic prefix
+
+## Change 2 — Client ID ✅ Already unique per chip
+
+Firmware verified using: `smartfarm_esp32_{efuseMac_hex}` (from `mqtt_handler.cpp:111`) — MAC-derived, unique per unit. No change needed for uniqueness.
+
+**Optional standardization:** match SMF convention `smf_device_{device_uid}`:
 ```cpp
-if (mqtt.connect(clientId, MQTT_USERNAME, MQTT_PASSWORD, ...)) { ... }
+String clientId = "smf_device_" + String(DEVICE_UID);  // DEVICE_UID = your SMF-XXXXX
 ```
-
-## Change 2 — Client ID (REQUIRED)
-
-Old: `esp32-{random}` or similar
-New: `smf_device_{device_uid}` — matches `iot_nodes.mqtt_client_id` (Phase 9 spec)
-
-```cpp
-String clientId = "smf_device_" + String(DEVICE_UID);
-```
+Only matters if HiveMQ ACL uses client ID pattern matching — currently not enforced.
 
 ## Change 3 — LWT (Last Will and Testament) — RECOMMENDED
 
