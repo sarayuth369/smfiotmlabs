@@ -1618,6 +1618,341 @@ Rule engine skips if any higher-priority command sent within cooldown window.
 
 ---
 
+## 20. Analytics + Anomaly Detection + Recommendations (Phase 11)
+
+Turn accumulated telemetry into actionable insights. Foundation only — UI + AI = Phase 11.2.
+
+**Design:**
+- `sensor_thresholds` — normal min/max per sensor (drives threshold analysis + anomaly detection)
+- `sensor_anomalies` — statistical anomaly log (rate-of-change, sigma, stale, stuck)
+- `recommendations` — smart hints for user (read/dismiss/resolve state)
+- `sensor_readings_latest` — materialized cache of latest reading per sensor (fast dashboard load)
+- `report_jobs` — scheduled/on-demand report metadata
+- RPC `get_sensor_stats(sensor_id, from, to)` — aggregated min/max/avg/count in single call
+
+```sql
+-- ============================================================
+-- 20.1  sensor_thresholds — normal operating range per sensor
+-- ============================================================
+create table if not exists public.sensor_thresholds (
+  sensor_id uuid primary key references public.sensors(id) on delete cascade,
+  min_normal numeric,                       -- warn if reading < this
+  max_normal numeric,                       -- warn if reading > this
+  min_critical numeric,                     -- critical if reading < this
+  max_critical numeric,                     -- critical if reading > this
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.sensor_thresholds enable row level security;
+
+drop policy if exists "sensor_thresholds_select_own" on public.sensor_thresholds;
+create policy "sensor_thresholds_select_own" on public.sensor_thresholds for select using (
+  exists (
+    select 1 from public.sensors s
+    join public.iot_nodes n on n.id = s.device_id
+    join public.farms f on f.id = n.farm_id
+    where s.id = sensor_thresholds.sensor_id and f.user_id = auth.uid()
+  )
+);
+-- User can UPSERT own via server action + service_role
+drop policy if exists "sensor_thresholds_upsert_own" on public.sensor_thresholds;
+create policy "sensor_thresholds_upsert_own" on public.sensor_thresholds for insert with check (
+  exists (
+    select 1 from public.sensors s
+    join public.iot_nodes n on n.id = s.device_id
+    join public.farms f on f.id = n.farm_id
+    where s.id = sensor_thresholds.sensor_id and f.user_id = auth.uid()
+  )
+);
+drop policy if exists "sensor_thresholds_update_own" on public.sensor_thresholds;
+create policy "sensor_thresholds_update_own" on public.sensor_thresholds for update using (
+  exists (
+    select 1 from public.sensors s
+    join public.iot_nodes n on n.id = s.device_id
+    join public.farms f on f.id = n.farm_id
+    where s.id = sensor_thresholds.sensor_id and f.user_id = auth.uid()
+  )
+);
+
+-- ============================================================
+-- 20.2  sensor_anomalies
+-- ============================================================
+create table if not exists public.sensor_anomalies (
+  id uuid primary key default gen_random_uuid(),
+  sensor_id uuid not null references public.sensors(id) on delete cascade,
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  detected_at timestamptz not null default now(),
+  detection_method text not null check (detection_method in ('threshold','sigma','rate_of_change','stale','stuck')),
+  severity text not null check (severity in ('info','warning','critical')),
+  value numeric,
+  expected_min numeric,
+  expected_max numeric,
+  reason text not null,
+  metadata jsonb,
+  status text not null default 'new' check (status in ('new','acknowledged','resolved','dismissed'))
+);
+
+create index if not exists sensor_anomalies_sensor_detected_idx
+  on public.sensor_anomalies(sensor_id, detected_at desc);
+create index if not exists sensor_anomalies_status_severity_idx
+  on public.sensor_anomalies(status, severity) where status = 'new';
+create index if not exists sensor_anomalies_device_idx
+  on public.sensor_anomalies(device_id, detected_at desc);
+
+alter table public.sensor_anomalies enable row level security;
+
+drop policy if exists "sensor_anomalies_select_own" on public.sensor_anomalies;
+create policy "sensor_anomalies_select_own" on public.sensor_anomalies for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensor_anomalies.device_id and f.user_id = auth.uid()
+  )
+);
+-- User can update status of own anomaly (ack/resolve/dismiss)
+drop policy if exists "sensor_anomalies_update_own" on public.sensor_anomalies;
+create policy "sensor_anomalies_update_own" on public.sensor_anomalies for update using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensor_anomalies.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT = service_role only (detection cron/worker)
+
+-- ============================================================
+-- 20.3  recommendations
+-- ============================================================
+create table if not exists public.recommendations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  farm_id uuid references public.farms(id) on delete cascade,
+  zone_id uuid references public.zones(id) on delete cascade,
+  device_id uuid references public.iot_nodes(id) on delete cascade,
+  sensor_id uuid references public.sensors(id) on delete cascade,
+  category text not null,                   -- 'irrigation','ventilation','device_health','power','sensor_health'
+  severity text not null default 'info' check (severity in ('info','warning','critical')),
+  title text not null,
+  description text not null,
+  reason text,
+  status text not null default 'new' check (status in ('new','read','dismissed','resolved')),
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  resolved_at timestamptz
+);
+
+create index if not exists recommendations_user_status_idx
+  on public.recommendations(user_id, status, created_at desc);
+create index if not exists recommendations_farm_idx
+  on public.recommendations(farm_id, created_at desc) where farm_id is not null;
+create index if not exists recommendations_new_severity_idx
+  on public.recommendations(severity, created_at desc) where status = 'new';
+
+alter table public.recommendations enable row level security;
+
+drop policy if exists "recommendations_select_own" on public.recommendations;
+create policy "recommendations_select_own" on public.recommendations for select
+  using (user_id = auth.uid());
+
+drop policy if exists "recommendations_update_own" on public.recommendations;
+create policy "recommendations_update_own" on public.recommendations for update
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+-- INSERT/DELETE = service_role only (recommendation engine)
+
+-- ============================================================
+-- 20.4  sensor_readings_latest — fast latest-value lookup
+-- ============================================================
+-- Cache table maintained by trigger. Avoid `distinct on` scan of large history.
+create table if not exists public.sensor_readings_latest (
+  sensor_id uuid primary key references public.sensors(id) on delete cascade,
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  value numeric not null,
+  unit text,
+  occurred_at timestamptz not null,
+  received_at timestamptz not null default now()
+);
+
+alter table public.sensor_readings_latest enable row level security;
+
+drop policy if exists "sensor_readings_latest_select_own" on public.sensor_readings_latest;
+create policy "sensor_readings_latest_select_own" on public.sensor_readings_latest for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = sensor_readings_latest.device_id and f.user_id = auth.uid()
+  )
+);
+-- Maintained via trigger (below) — no direct writes
+
+-- Trigger: on sensor_readings INSERT, upsert into latest (only if newer)
+create or replace function public.sync_sensor_readings_latest()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.sensor_readings_latest (sensor_id, device_id, value, unit, occurred_at, received_at)
+  values (new.sensor_id, new.device_id, new.value, new.unit, new.occurred_at, new.received_at)
+  on conflict (sensor_id) do update set
+    value = excluded.value,
+    unit = excluded.unit,
+    occurred_at = excluded.occurred_at,
+    received_at = excluded.received_at,
+    device_id = excluded.device_id
+  where sensor_readings_latest.occurred_at < excluded.occurred_at;
+  return new;
+end $$;
+
+drop trigger if exists sensor_readings_sync_latest on public.sensor_readings;
+create trigger sensor_readings_sync_latest
+  after insert on public.sensor_readings
+  for each row execute function public.sync_sensor_readings_latest();
+
+-- ============================================================
+-- 20.5  RPC: get_sensor_stats
+-- ============================================================
+-- Aggregate min/max/avg/count in a single RPC call — replaces 4 separate queries
+create or replace function public.get_sensor_stats(
+  p_sensor_id uuid,
+  p_from timestamptz,
+  p_to timestamptz
+)
+returns table (
+  sensor_id uuid,
+  count bigint,
+  min_value numeric,
+  max_value numeric,
+  avg_value numeric,
+  latest_value numeric,
+  latest_at timestamptz
+)
+language sql stable security invoker set search_path = public as $$
+  select
+    p_sensor_id as sensor_id,
+    count(*)::bigint,
+    min(value),
+    max(value),
+    round(avg(value)::numeric, 2),
+    (select value from public.sensor_readings
+       where sensor_id = p_sensor_id and occurred_at between p_from and p_to
+       order by occurred_at desc limit 1) as latest_value,
+    (select occurred_at from public.sensor_readings
+       where sensor_id = p_sensor_id and occurred_at between p_from and p_to
+       order by occurred_at desc limit 1) as latest_at
+  from public.sensor_readings
+  where sensor_id = p_sensor_id and occurred_at between p_from and p_to;
+$$;
+
+grant execute on function public.get_sensor_stats(uuid, timestamptz, timestamptz) to authenticated;
+
+-- ============================================================
+-- 20.6  RPC: get_sensor_hourly_avg — for time-series chart
+-- ============================================================
+create or replace function public.get_sensor_hourly_avg(
+  p_sensor_id uuid,
+  p_from timestamptz,
+  p_to timestamptz
+)
+returns table (bucket timestamptz, avg_value numeric, min_value numeric, max_value numeric, count bigint)
+language sql stable security invoker set search_path = public as $$
+  select
+    date_trunc('hour', occurred_at) as bucket,
+    round(avg(value)::numeric, 2) as avg_value,
+    min(value) as min_value,
+    max(value) as max_value,
+    count(*)::bigint as count
+  from public.sensor_readings
+  where sensor_id = p_sensor_id and occurred_at between p_from and p_to
+  group by bucket
+  order by bucket asc;
+$$;
+
+grant execute on function public.get_sensor_hourly_avg(uuid, timestamptz, timestamptz) to authenticated;
+
+-- ============================================================
+-- 20.7  report_jobs — scheduled + on-demand reports
+-- ============================================================
+create table if not exists public.report_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  farm_id uuid references public.farms(id) on delete cascade,
+  report_type text not null check (report_type in ('farm_daily','farm_weekly','farm_monthly','device_health','automation','anomaly')),
+  format text not null default 'pdf' check (format in ('pdf','csv','json')),
+  period_start timestamptz not null,
+  period_end timestamptz not null,
+  status text not null default 'pending' check (status in ('pending','generating','completed','failed')),
+  file_path text,                           -- Supabase Storage path
+  error_message text,
+  requested_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create index if not exists report_jobs_user_requested_idx
+  on public.report_jobs(user_id, requested_at desc);
+create index if not exists report_jobs_status_idx
+  on public.report_jobs(status) where status in ('pending','generating');
+
+alter table public.report_jobs enable row level security;
+
+drop policy if exists "report_jobs_select_own" on public.report_jobs;
+create policy "report_jobs_select_own" on public.report_jobs for select
+  using (user_id = auth.uid());
+
+drop policy if exists "report_jobs_insert_own" on public.report_jobs;
+create policy "report_jobs_insert_own" on public.report_jobs for insert
+  with check (user_id = auth.uid());
+-- UPDATE = service_role only (generator worker)
+```
+
+**KNOWN_FEATURES to extend** in [lib/plan-limits.ts](lib/plan-limits.ts):
+```ts
+{ key: "ai_assistant", label: "AI Farm Assistant" },
+{ key: "advanced_analytics", label: "Advanced Analytics + Trends" },
+{ key: "scheduled_reports", label: "Scheduled Reports (Daily/Weekly)" },
+{ key: "anomaly_detection", label: "Anomaly Detection" },
+```
+(entries `reports`, `ai`, `automation` already exist)
+
+**Anomaly detection algorithms** (lib/anomaly.ts):
+
+| Method | Trigger | Severity |
+|---|---|---|
+| `threshold` | Reading outside `sensor_thresholds.min/max_normal` | warning |
+| `threshold` | Reading outside `min/max_critical` | critical |
+| `sigma` | Reading > 3σ from 24h rolling avg | warning |
+| `rate_of_change` | Δvalue/Δtime > 20%/min | warning |
+| `stale` | No reading > 3× reporting interval | warning |
+| `stuck` | Same value for 20+ consecutive readings | info |
+
+**Recommendation engine** — triggered by:
+- Repeat threshold violations (3+ times in 24h) → irrigation/ventilation category
+- Anomaly critical + no automation to fix → device_health category
+- Device offline > 1 hour → device_health critical
+- Automation failed 5+ times → automation category
+
+Cron `/api/cron/analytics-scan` (add to vercel.json, daily 04:00 UTC) runs anomaly + recommendation generation.
+
+**Farm Health Score formula:**
+```
+score = 100
+  - 10 × (offline_devices / total_devices)
+  - 15 × (new_critical_anomalies / max(1, sensor_count))
+  - 5  × (new_warning_anomalies / max(1, sensor_count))
+  - 10 × (automation_failures_24h / max(1, active_automations))
+clamp 0..100
+```
+0-39 Critical / 40-59 Poor / 60-79 Good / 80-100 Excellent
+
+**AI architecture (Phase 11.2 spec — not implemented):**
+- User query → `/api/ai/chat` → LLM (Claude via Anthropic API — env `ANTHROPIC_API_KEY`)
+- Tool-use pattern: LLM calls whitelisted tools `get_farm_summary`, `get_sensor_stats`, `list_active_anomalies` — each tool runs under user's Supabase RLS context
+- **AI cannot** publish MQTT / mutate DB / access other users' data
+- Plan gate: `hasFeature(plan, 'ai_assistant')` before route runs
+- Rate limit: 10 queries/day (Starter), 100/day (Pro), unlimited (Business+) via `ai_query_log` table
+
+**Rerun-safe:** all `if not exists`, `or replace`, `on conflict` — run entire Section 20 anytime.
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
