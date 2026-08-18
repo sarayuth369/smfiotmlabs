@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatThaiDate } from "@/lib/payment";
+import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
 import { ArchiveDeviceButton, RestoreDeviceButton } from "./DeviceArchiveButtons";
 
 export type DeviceRow = {
@@ -19,10 +19,11 @@ export type DeviceRow = {
   created_at: string;
 };
 
-const STATUS: Record<DeviceRow["status"], { label: string; cls: string; dot: string }> = {
+const STATUS: Record<"online" | "offline" | "warning" | "never_connected", { label: string; cls: string; dot: string }> = {
   online: { label: "Online", cls: "bg-green-100 text-green-800", dot: "bg-green-500" },
   offline: { label: "Offline", cls: "bg-brand-100 text-brand-700/70", dot: "bg-brand-400" },
   warning: { label: "Warning", cls: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
+  never_connected: { label: "Never Connected", cls: "bg-brand-100 text-brand-700/60", dot: "bg-brand-300" },
 };
 
 export function DeviceCard({
@@ -35,7 +36,7 @@ export function DeviceCard({
   showFarmLink?: boolean;
 }) {
   const isArchived = !!device.archived_at;
-  const s = STATUS[device.status];
+  const s = STATUS[computeDeviceStatus(device.status, device.last_seen)];
   return (
     <div className={`card p-5 sm:p-6 flex flex-col ${isArchived ? "opacity-75" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -85,7 +86,7 @@ export function DeviceCard({
         <div className="col-span-2">
           <dt className="text-xs text-brand-900/55">Last Seen</dt>
           <dd className="font-semibold text-brand-800">
-            {device.last_seen ? formatThaiDate(device.last_seen) : "ยังไม่เคยเชื่อมต่อ"}
+            {formatLastSeenRelative(device.last_seen)}
           </dd>
         </div>
       </dl>
