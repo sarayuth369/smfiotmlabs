@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { SENSOR_TYPES, isValidSensorType, sensorTypeLabel, sensorTypeIcon } from "@/lib/sensor-types";
+import { LiveSensorValue } from "../../_components/LiveSensorValue";
 
 export default async function SensorDetailPage({
   params,
@@ -152,36 +153,20 @@ export default async function SensorDetailPage({
           </div>
 
           <div className="card p-6">
-            <h2 className="font-bold text-brand-800">ค่าล่าสุด (Latest Reading)</h2>
-            {latestRow ? (
-              <div className="mt-4">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-extrabold text-brand-800">
-                    {Number(latestRow.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-2xl font-semibold text-brand-700">
-                    {(latestRow.unit as string | null) ?? unit}
-                  </span>
-                </div>
-                <div className="mt-3 text-xs text-brand-900/55">
-                  อัปเดตเมื่อ{" "}
-                  <span className="font-semibold text-brand-800">
-                    {new Date(latestRow.occurred_at as string).toLocaleString("th-TH")}
-                  </span>
-                </div>
-                <p className="mt-4 text-xs text-brand-900/45">
-                  รีเฟรชหน้าเพื่อดูค่าล่าสุด (realtime auto-update ในเฟสถัดไป)
-                </p>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-dashed border-brand-200 p-6 text-center text-sm text-brand-900/50">
-                <div className="text-3xl">📡</div>
-                <div className="mt-2 font-semibold text-brand-800">ยังไม่ได้รับข้อมูลจากอุปกรณ์</div>
-                <p className="mt-1 text-xs text-brand-900/55">
-                  ตรวจว่า ESP32 online + bridge worker ทำงาน + channel ของ sensor ตรงกับ payload
-                </p>
-              </div>
-            )}
+            <h2 className="font-bold text-brand-800">ค่าล่าสุด (Live)</h2>
+            <div className="mt-4">
+              <LiveSensorValue
+                sensorId={sensorId}
+                initialValue={latestRow ? Number(latestRow.value) : null}
+                initialUnit={(latestRow?.unit as string | null) ?? null}
+                initialOccurredAt={(latestRow?.occurred_at as string | null) ?? null}
+                fallbackUnit={unit}
+                size="lg"
+              />
+            </div>
+            <p className="mt-4 text-xs text-brand-900/45">
+              อัปเดตอัตโนมัติทุก 5 วินาที
+            </p>
           </div>
         </div>
 

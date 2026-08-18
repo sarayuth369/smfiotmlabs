@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { canCreateSensor } from "@/lib/plan-limits";
 import { sensorTypeIcon, sensorTypeLabel } from "@/lib/sensor-types";
+import { LiveSensorValue } from "./_components/LiveSensorValue";
 
 type Device = {
   id: string;
@@ -272,23 +273,14 @@ export default async function DeviceDetailPage({
                         {sensorTypeIcon(s.sensor_type)} {sensorTypeLabel(s.sensor_type)}
                         {s.channel && <span className="ml-1 font-mono text-[10px]">Ch:{s.channel}</span>}
                       </div>
-                      {latest ? (
-                        <>
-                          <div className="mt-1 flex items-baseline gap-1">
-                            <span className="text-2xl font-extrabold text-brand-800">
-                              {Number(latest.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-sm text-brand-700">
-                              {latest.unit ?? s.unit ?? ""}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-[10px] text-brand-900/50">
-                            {new Date(latest.occurred_at).toLocaleTimeString("th-TH")}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-1 text-sm text-brand-900/40 italic">— ยังไม่มีข้อมูล —</div>
-                      )}
+                      <LiveSensorValue
+                        sensorId={s.id}
+                        initialValue={latest ? Number(latest.value) : null}
+                        initialUnit={latest?.unit ?? null}
+                        initialOccurredAt={latest?.occurred_at ?? null}
+                        fallbackUnit={s.unit ?? ""}
+                        size="sm"
+                      />
                     </div>
                   );
                 })}
