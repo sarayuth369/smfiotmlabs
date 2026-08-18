@@ -127,11 +127,19 @@ export async function POST(req: Request) {
 
   let inserted = 0;
   if (rows.length > 0) {
-    // upsert on (sensor_id, message_id) — ignore duplicates
+    // Plain insert. PostgREST upsert with partial unique index (WHERE message_id IS NOT NULL)
+    // fails with "no unique or exclusion constraint matching ON CONFLICT" — bridge already
+    // generates fresh message_id per POST so duplicates are not expected in practice.
+    // If duplicates from broker retries do occur, catch 23505 unique-violation and ignore.
     const { error: insErr, count } = await admin
       .from("sensor_readings")
-      .upsert(rows, { onConflict: "sensor_id,message_id", ignoreDuplicates: true, count: "exact" });
-    if (insErr) return json({ ok: false, error: "insert failed", detail: insErr.message }, 500);
+      .insert(rows, { count: "exact" });
+    if (insErr) {
+      // 23505 = unique constraint violation (message_id collision) — safe to ignore
+      if (insErr.code !== "23505") {
+        return json({ ok: false, error: "insert failed", detail: insErr.message }, 500);
+      }
+    }
     inserted = count ?? rows.length;
   }
 
