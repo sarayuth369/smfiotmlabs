@@ -115,6 +115,21 @@ export default async function DeviceDetailPage({
   }[];
   const archivedSensorCount = archivedSensorRes.count ?? 0;
 
+  // Fetch latest readings for all sensors in one query (Phase 11 cache)
+  const sensorIds = sensors.map((s) => s.id);
+  const { data: latestRows } = sensorIds.length > 0
+    ? await supabase
+        .from("sensor_readings_latest")
+        .select("sensor_id, value, unit, occurred_at")
+        .in("sensor_id", sensorIds)
+    : { data: [] };
+  const latestBySensor = new Map<string, { value: number; unit: string | null; occurred_at: string }>(
+    (latestRows ?? []).map((r) => [
+      r.sensor_id as string,
+      { value: r.value as number, unit: r.unit as string | null, occurred_at: r.occurred_at as string },
+    ])
+  );
+
   return (
     <div>
       <div className="flex items-center gap-2 text-sm text-brand-700/70 mb-2">
@@ -244,20 +259,43 @@ export default async function DeviceDetailPage({
           </div>
 
           <div className="card p-6">
-            <h2 className="font-bold text-brand-800">MQTT Topics (เตรียมพร้อม)</h2>
-            <div className="mt-3 space-y-2 text-xs font-mono text-brand-900/75">
-              <div className="rounded-lg bg-brand-50/60 border border-brand-100 px-3 py-2">
-                smfiot/{raw.device_uid}/telemetry
+            <h2 className="font-bold text-brand-800">ค่า Sensor ล่าสุด</h2>
+            {sensors.length === 0 ? (
+              <p className="mt-3 text-sm text-brand-900/55">ยังไม่มี Sensor — เพิ่มด้านล่าง</p>
+            ) : (
+              <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                {sensors.map((s) => {
+                  const latest = latestBySensor.get(s.id);
+                  return (
+                    <div key={s.id} className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+                      <div className="text-xs font-semibold text-brand-900/60">
+                        {sensorTypeIcon(s.sensor_type)} {sensorTypeLabel(s.sensor_type)}
+                        {s.channel && <span className="ml-1 font-mono text-[10px]">Ch:{s.channel}</span>}
+                      </div>
+                      {latest ? (
+                        <>
+                          <div className="mt-1 flex items-baseline gap-1">
+                            <span className="text-2xl font-extrabold text-brand-800">
+                              {Number(latest.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-sm text-brand-700">
+                              {latest.unit ?? s.unit ?? ""}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[10px] text-brand-900/50">
+                            {new Date(latest.occurred_at).toLocaleTimeString("th-TH")}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-1 text-sm text-brand-900/40 italic">— ยังไม่มีข้อมูล —</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="rounded-lg bg-brand-50/60 border border-brand-100 px-3 py-2">
-                smfiot/{raw.device_uid}/status
-              </div>
-              <div className="rounded-lg bg-brand-50/60 border border-brand-100 px-3 py-2">
-                smfiot/{raw.device_uid}/command
-              </div>
-            </div>
+            )}
             <p className="mt-3 text-xs text-brand-900/55">
-              การเชื่อมต่อ MQTT / HiveMQ / Sensor Realtime จะเปิดใช้งานในเฟสถัดไป
+              รีเฟรชหน้าเพื่อดูค่าล่าสุด — MQTT topic pattern: <code className="font-mono text-brand-700">farm/{"{type}"}</code>
             </p>
           </div>
         </div>
