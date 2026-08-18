@@ -1953,6 +1953,198 @@ clamp 0..100
 
 ---
 
+## 21. Legacy Flutter/ESP32 Protocol Adapter (Special Phase ESP32-Test)
+
+Bridge existing Flutter app's MQTT protocol (`farm/*` topics, single-tenant, `broker.emqx.io` default) to SMF Web (`smfiot/{uid}/*`, multi-tenant, HiveMQ).
+
+**See:** [docs/existing-app-mqtt-analysis.md](docs/existing-app-mqtt-analysis.md) + [docs/mqtt-integration-gap-analysis.md](docs/mqtt-integration-gap-analysis.md) for source-verified findings.
+
+```sql
+-- ============================================================
+-- 21.1  Expand sensors.sensor_type check for legacy compat
+-- ============================================================
+-- Legacy Flutter/ESP32 sends voltage/current/power (INA226) — needs new types
+alter table public.sensors drop constraint if exists sensors_sensor_type_check;
+alter table public.sensors add constraint sensors_sensor_type_check
+  check (sensor_type in (
+    'temperature','humidity','soil_moisture','light','npk','ph','ec','co2',
+    'voltage','current','power','rssi'
+  ));
+
+-- ============================================================
+-- 21.2  legacy_device_mappings — bridge `farm/*` topics to SMF device
+-- ============================================================
+-- Legacy ESP32 firmware uses hardcoded `farm/*` topics (single-tenant).
+-- This table maps 1 legacy topic namespace → 1 SMF device.id.
+--
+-- Test mode: exactly 1 ESP32 per broker until firmware adds device prefix.
+-- Multi-device: firmware must publish `{prefix}/temp` where prefix is unique.
+create table if not exists public.legacy_device_mappings (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid unique not null references public.iot_nodes(id) on delete cascade,
+  legacy_topic_prefix text not null default 'farm',   -- 'farm' for stock firmware; can be per-device UID if firmware modified
+  mac_address text,                                    -- ESP32 MAC (colon-hex) for correlation
+  chip_id text,                                        -- ESP.getChipId() if firmware publishes it
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists legacy_device_mappings_prefix_uniq
+  on public.legacy_device_mappings(legacy_topic_prefix);
+
+alter table public.legacy_device_mappings enable row level security;
+
+-- User can SELECT own mapping via device→farm chain
+drop policy if exists "legacy_device_mappings_select_own" on public.legacy_device_mappings;
+create policy "legacy_device_mappings_select_own" on public.legacy_device_mappings for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = legacy_device_mappings.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE/DELETE = service_role only (admin creates mapping when provisioning ESP32)
+
+drop trigger if exists legacy_device_mappings_set_updated_at on public.legacy_device_mappings;
+create trigger legacy_device_mappings_set_updated_at
+  before update on public.legacy_device_mappings
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- 21.3  RPC: resolve_legacy_device — worker uses this to look up SMF device from legacy topic
+-- ============================================================
+create or replace function public.resolve_legacy_device(p_topic_prefix text)
+returns table (
+  device_id uuid,
+  device_uid text,
+  farm_id uuid,
+  is_disabled boolean,
+  archived_at timestamptz
+)
+language sql stable security definer set search_path = public as $$
+  select n.id, n.device_uid, n.farm_id, n.is_disabled, n.archived_at
+  from public.legacy_device_mappings m
+  join public.iot_nodes n on n.id = m.device_id
+  where m.legacy_topic_prefix = p_topic_prefix;
+$$;
+
+-- Only service_role calls this (worker) — no grant to authenticated
+```
+
+**Worker adapter spec** — subscribe **both** patterns:
+```
+smfiot/+/telemetry        # new devices (Phase 9 spec)
+smfiot/+/status
+farm/#                    # legacy (all farm/* topics)
+```
+
+**Legacy topic → SMF transform** (implement in worker):
+
+```typescript
+// Pseudo-code — actual impl in worker repo
+async function handleLegacyMessage(topic: string, payload: string) {
+  const parts = topic.split('/');  // ['farm', 'temp'] or ['farm', 'device', 'status'] or ['farm', 'relay', '1', 'status']
+  if (parts[0] !== 'farm') return;
+  const prefix = parts[0];  // 'farm' — future: `parts[0]` will be per-device
+
+  const { data } = await admin.rpc('resolve_legacy_device', { p_topic_prefix: prefix });
+  if (!data || data.length === 0) return;  // unknown legacy device
+  const device = data[0];
+  if (device.is_disabled || device.archived_at) return;
+
+  const json = JSON.parse(payload);
+
+  // Route by sub-topic
+  if (parts[1] === 'device' && parts[2] === 'status') {
+    await admin.from('iot_nodes').update({
+      status: json.online ? 'online' : 'offline',
+      last_seen: new Date().toISOString(),
+    }).eq('id', device.device_id);
+    await admin.from('device_events').insert({
+      device_id: device.device_id,
+      event_type: json.online ? 'connected' : 'disconnected',
+      payload: { rssi: json.rssi, device_time: json.time },
+    });
+    return;
+  }
+
+  if (parts[1] === 'relay' && parts[3] === 'status') {
+    // Update matching pending device_commands for this relay channel
+    const channel = parseInt(parts[2]);
+    await admin
+      .from('device_commands')
+      .update({ status: 'acknowledged', acknowledged_at: new Date().toISOString(), response: json })
+      .eq('device_id', device.device_id)
+      .in('status', ['sent'])
+      .contains('payload', { channel });
+    await admin.from('device_events').insert({
+      device_id: device.device_id,
+      event_type: 'relay_changed',
+      payload: { channel, state: json.state },
+    });
+    return;
+  }
+
+  // Sensor reading — map topic → sensor_type + extract value
+  const mapping: Record<string, { sensor_type: string; field: string; unit: string }[]> = {
+    'farm/temp':     [{ sensor_type: 'temperature', field: 'temperature', unit: '°C' }],
+    'farm/humidity': [{ sensor_type: 'humidity',    field: 'humidity',    unit: '%' }],
+    'farm/light':    [{ sensor_type: 'light',       field: 'lux',         unit: 'lux' }],
+    'farm/soil':     [
+      { sensor_type: 'ph',           field: 'ph',       unit: 'pH' },
+      { sensor_type: 'ec',           field: 'ec',       unit: 'µS/cm' },
+      { sensor_type: 'npk',          field: 'n',        unit: 'mg/kg' },  // stored as 3 separate readings if channels set up
+      { sensor_type: 'soil_moisture',field: 'moisture', unit: '%' },
+    ],
+    'farm/power':    [
+      { sensor_type: 'voltage', field: 'v', unit: 'V' },
+      { sensor_type: 'current', field: 'a', unit: 'A' },
+      { sensor_type: 'power',   field: 'w', unit: 'W' },
+    ],
+  };
+  const targets = mapping[topic];
+  if (!targets) return;
+
+  const readings = targets
+    .filter((t) => typeof json[t.field] === 'number')
+    .map((t) => ({ sensor_type: t.sensor_type, channel: null, value: json[t.field], unit: t.unit }));
+
+  if (readings.length === 0) return;
+
+  // Reuse existing /api/telemetry/ingest — call locally within worker
+  await ingestBatch({
+    device_uid: device.device_uid,
+    occurred_at: new Date().toISOString(),
+    readings,
+  });
+}
+```
+
+**Command routing (SMF → legacy ESP32)** — worker subscribes `smfiot/+/command`:
+```typescript
+// When user clicks Relay ON in Web:
+// 1. API inserts device_commands(command='relay_on', payload={channel:1})
+// 2. Worker sees new command, looks up legacy mapping
+// 3. Worker publishes `farm/relay/1/set` with `{"state": true}` — legacy protocol
+// 4. ESP32 receives, switches relay, publishes `farm/relay/1/status` `{"state":true}`
+// 5. Worker maps back → updates device_commands.status='acknowledged'
+```
+
+**Provisioning workflow (Admin):**
+1. User adds SMF device via Web UI → gets `device_uid` (e.g. `SMF-A1B2C3D4`)
+2. Admin runs SQL:
+   ```sql
+   insert into public.legacy_device_mappings (device_id, legacy_topic_prefix, mac_address, notes)
+   values ('YOUR_DEVICE_UUID', 'farm', '24:6F:28:AA:BB:CC', 'Test unit ESP32 in workshop');
+   ```
+3. Reflash ESP32 firmware with HiveMQ credentials (see docs/esp32-mqtt-integration-spec.md)
+4. Power ESP32 → publishes `farm/device/status` → worker resolves → SMF device goes online
+
+**Rerun-safe:** all `if not exists`, `drop constraint if exists` — Section 21 runnable anytime.
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:

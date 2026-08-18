@@ -11,6 +11,10 @@ export const SENSOR_TYPES = {
   ph: { label: "pH", icon: "🧫", unit: "pH" },
   ec: { label: "EC", icon: "⚡", unit: "mS/cm" },
   co2: { label: "CO₂", icon: "🌫", unit: "ppm" },
+  voltage: { label: "Voltage", icon: "🔌", unit: "V" },
+  current: { label: "Current", icon: "⚡", unit: "A" },
+  power: { label: "Power", icon: "💡", unit: "W" },
+  rssi: { label: "WiFi Signal", icon: "📶", unit: "dBm" },
 } as const;
 
 export type SensorType = keyof typeof SENSOR_TYPES;
