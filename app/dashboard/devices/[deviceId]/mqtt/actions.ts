@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -95,12 +94,3 @@ export async function claimDeviceByCode(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/farms");
 }
 
-/**
- * Admin only — generate a claim code for factory provisioning.
- * Server-side random, 16-char hyphenated.
- */
-export function generateClaimCode(): string {
-  const bytes = randomBytes(8);
-  const hex = bytes.toString("hex").toUpperCase();
-  return `SMF-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
-}
