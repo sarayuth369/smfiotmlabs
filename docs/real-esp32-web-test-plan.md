@@ -61,7 +61,7 @@ Firmware **already configured for HiveMQ** — see [esp32-firmware-analysis.md](
 
 - MQTT_HOST already = HiveMQ cluster
 - MQTT_PORT = 8883 (TLS)
-- Credential `smfiot:Smfiot4556#` currently shared across all devices — works for single-device test
+- Credential `smfiot:<REDACTED>` currently shared across all devices — works for single-device test
 
 **Just power on the ESP32.** It connects to HiveMQ, publishes `farm/*` topics with existing credential. Worker sees messages via same broker.
 

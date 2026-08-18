@@ -28,7 +28,7 @@
 
 **Actual state (verified from `firmware/main_board/include/config.h`):**
 - ESP32 firmware **ALREADY on HiveMQ** — `MQTT_HOST = c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud:8883`
-- Uses shared credential `smfiot:Smfiot4556#` (🔴 leaked in git — see esp32-firmware-analysis.md §3)
+- Uses shared credential `smfiot:<REDACTED>` (🔴 leaked in git — see esp32-firmware-analysis.md §3)
 - Flutter App default is still `broker.emqx.io` (user overrides via Settings)
 
 **Action:** Flutter App user must change broker Setting → HiveMQ credential to match ESP32. No firmware reflash needed for connectivity.

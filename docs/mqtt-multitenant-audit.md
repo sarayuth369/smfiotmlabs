@@ -13,7 +13,7 @@
 ## 1. Current Architecture
 
 ```
-ESP32 (shared credential smfiot:Smfiot4556#)
+ESP32 (shared credential smfiot:<REDACTED>)
   ↓ mqtts://8883 — farm/temp, farm/humidity, farm/device/status
 HiveMQ Cloud Free (1 credential = all devices)
   ↓ subscribe farm/#
@@ -61,7 +61,7 @@ Web (5s polling via sensor_readings_latest cache)
 
 ### 🔴 Critical
 
-1. **`smfiot:Smfiot4556#` leaked in firmware `config.h`** git-tracked → anyone with repo access = broker admin
+1. **`smfiot:<REDACTED>` leaked in firmware `config.h`** git-tracked → anyone with repo access = broker admin
 2. **All devices share 1 credential** → cannot revoke one without breaking all
 3. **No broker-level ACL** → any authenticated client subscribe/publish any topic (all future customers exposed)
 4. **Bridge worker uses shared credential** → subscribes `farm/#` = ALL data on broker (fine for single-device test, blocker for multi-tenant)
@@ -240,7 +240,7 @@ Legacy path resolves via `legacy_device_mappings.legacy_topic_prefix='farm'` →
 ### Phase 1 — Immediate (this week, blocking security)
 
 - [ ] Keep Free tier for SMF001 test only
-- [ ] Rotate `smfiot:Smfiot4556#` credential in HiveMQ Dashboard (delete + create new random)
+- [ ] Rotate the leaked `smfiot` credential in HiveMQ Dashboard (delete + create new random)
 - [ ] Move `MQTT_PASSWORD` firmware constant → `secrets.h` (gitignored)
 - [ ] Update Railway bridge env `HIVEMQ_PASS` to new value
 

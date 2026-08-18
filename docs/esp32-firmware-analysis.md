@@ -22,7 +22,7 @@ All findings from actual firmware source code — byte-level verified.
 #define MQTT_HOST           "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud"
 #define MQTT_PORT           8883
 #define MQTT_USER           "smfiot"
-#define MQTT_PASSWORD       "Smfiot4556#"          // ⚠ SECURITY ISSUE — see below
+#define MQTT_PASSWORD       "<REDACTED>"           // ⚠ SECURITY ISSUE — see below
 #define MQTT_CLIENT_PREFIX  "smartfarm_esp32_"
 #define MQTT_BUFFER_SIZE    1024
 ```
@@ -37,7 +37,7 @@ All findings from actual firmware source code — byte-level verified.
 
 | # | Severity | Issue | Fix |
 |---|---|---|---|
-| 1 | 🔴 CRITICAL | **MQTT credentials `smfiot:Smfiot4556#` hardcoded in `config.h`** — likely in git history, world-readable if repo shared | **Rotate credential in HiveMQ Dashboard immediately**. Regenerate + reflash all ESP32s. Move plaintext to build-time secret (PlatformIO env / `secrets.h` in gitignore) |
+| 1 | 🔴 CRITICAL | **MQTT credentials `smfiot:<REDACTED>` hardcoded in `config.h`** — in git history, world-readable if repo shared | **Rotate credential in HiveMQ Dashboard immediately**. Regenerate + reflash all ESP32s. Move plaintext to build-time secret (PlatformIO env / `secrets.h` in gitignore) |
 | 2 | 🔴 CRITICAL | **Single shared credential across all devices** — one compromised device = all devices compromised. Zero per-device isolation | Generate per-device credential using `lib/device-auth.ts` (Phase 9). Flash unique password per unit. HiveMQ Access Management allows this |
 | 3 | 🟡 HIGH | `setInsecure()` — TLS without cert validation | Bundle ISRG Root X1 (or HiveMQ CA), call `setCACert()` instead. ~2KB flash cost |
 | 4 | 🟡 HIGH | Topics `farm/*` are single-tenant — 2 ESP32s on same broker collide (both publish `farm/temp`, latter overwrites former) | Add device UID prefix per unit (see Section 6) |

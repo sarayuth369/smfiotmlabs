@@ -11,14 +11,14 @@ Firmware already uses HiveMQ TLS (verified in `config.h`):
 #define MQTT_HOST     "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud"
 #define MQTT_PORT     8883
 #define MQTT_USER     "smfiot"          // ⚠ hardcoded + shared — see Change 1a
-#define MQTT_PASSWORD "Smfiot4556#"     // ⚠ leaked in git — rotate!
+#define MQTT_PASSWORD "<REDACTED>"      // ⚠ leaked in git history — MUST rotate at HiveMQ Dashboard
 ```
 
 TLS via `WiFiClientSecure::setInsecure()` — encrypted but cert not validated. Upgrade to `setCACert()` recommended (Change 1b).
 
 ## Change 1a — Rotate leaked credential (CRITICAL, DO NOW)
 
-`smfiot:Smfiot4556#` is in `config.h` git-tracked. Anyone with repo access has broker admin.
+The shared `smfiot` credential (password redacted) is in `config.h` git-tracked. Anyone with repo access has broker admin.
 
 Steps:
 1. HiveMQ Dashboard → Access Management → delete `smfiot` credential
