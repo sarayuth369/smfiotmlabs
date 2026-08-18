@@ -32,10 +32,10 @@ const STATUS_CLS: Record<Device["status"], string> = {
 
 const SUBNAV = [
   { key: "overview", label: "Overview", active: true },
-  { key: "sensors", label: "Sensors" }, // now live — anchor to #sensors section
+  { key: "sensors", label: "Sensors" },
   { key: "control", label: "Control", soon: true },
   { key: "firmware", label: "Firmware", soon: true },
-  { key: "mqtt", label: "MQTT", soon: true },
+  { key: "mqtt", label: "MQTT" },
 ];
 
 export default async function DeviceDetailPage({
@@ -168,11 +168,12 @@ export default async function DeviceDetailPage({
       <div className="border-b border-brand-100 mb-6 overflow-x-auto">
         <div className="flex items-center gap-1 min-w-max">
           {SUBNAV.map((n) => {
-            const isLink = n.key === "sensors";
+            const linkHref =
+              n.key === "sensors" ? "#sensors" : n.key === "mqtt" ? `/dashboard/devices/${deviceId}/mqtt` : null;
             const cls = `px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
               n.active
                 ? "text-brand-800 border-b-2 border-brand-600"
-                : isLink
+                : linkHref
                   ? "text-brand-800 hover:text-brand-600"
                   : "text-brand-900/40"
             }`;
@@ -186,8 +187,8 @@ export default async function DeviceDetailPage({
                 )}
               </>
             );
-            return isLink ? (
-              <a key={n.key} href="#sensors" className={cls}>
+            return linkHref ? (
+              <a key={n.key} href={linkHref} className={cls}>
                 {content}
               </a>
             ) : (
