@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { canCreateSensor } from "@/lib/plan-limits";
 import { sensorTypeIcon, sensorTypeLabel } from "@/lib/sensor-types";
+import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
 import { LiveSensorValue } from "./_components/LiveSensorValue";
 
 type Device = {
@@ -24,10 +25,11 @@ type Device = {
   zones: { name: string } | null;
 };
 
-const STATUS_CLS: Record<Device["status"], string> = {
+const STATUS_CLS: Record<"online" | "offline" | "warning" | "never_connected", string> = {
   online: "bg-green-100 text-green-800",
   offline: "bg-brand-100 text-brand-700/70",
   warning: "bg-amber-100 text-amber-800",
+  never_connected: "bg-brand-100 text-brand-700/60",
 };
 
 const SUBNAV = [
@@ -147,9 +149,14 @@ export default async function DeviceDetailPage({
                 Archived
               </span>
             ) : (
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_CLS[raw.status]}`}>
-                {raw.status}
-              </span>
+              (() => {
+                const eff = computeDeviceStatus(raw.status, raw.last_seen);
+                return (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_CLS[eff]}`}>
+                    {eff === "never_connected" ? "NEVER CONNECTED" : eff.toUpperCase()}
+                  </span>
+                );
+              })()
             )}
           </div>
         </div>
@@ -254,7 +261,12 @@ export default async function DeviceDetailPage({
               <div>
                 <dt className="text-xs text-brand-900/55">Last Seen</dt>
                 <dd className="font-semibold text-brand-800 mt-0.5">
-                  {raw.last_seen ? formatThaiDate(raw.last_seen) : "ยังไม่เคยเชื่อมต่อ"}
+                  {formatLastSeenRelative(raw.last_seen)}
+                  {raw.last_seen && (
+                    <span className="ml-1 text-xs text-brand-900/50 font-normal">
+                      ({new Date(raw.last_seen).toLocaleString("th-TH")})
+                    </span>
+                  )}
                 </dd>
               </div>
             </dl>
