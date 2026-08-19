@@ -2287,6 +2287,48 @@ smf/{customer_identity_id}/{device_uid}/relay/{ch}/status
 
 ---
 
+## 23. HiveMQ Starter Readiness (Special Phase 4.4)
+
+Prepare `device_credentials` for automated provisioning lifecycle when HiveMQ Cloud Starter tier is enabled. Backward-compatible with Free/manual mode (existing SMF001 unaffected).
+
+```sql
+-- ============================================================
+-- 23.1  Extend device_credentials for provisioning lifecycle
+-- ============================================================
+alter table public.device_credentials
+  add column if not exists provisioning_status text not null default 'active'
+    check (provisioning_status in ('pending','active','failed','revoked')),
+  add column if not exists hivemq_credential_id text,   -- broker-side ID (populated by adapter in automatic mode)
+  add column if not exists provisioning_error text,
+  add column if not exists last_used_at timestamptz;    -- future — track credential activity
+
+create index if not exists device_credentials_provisioning_status_idx
+  on public.device_credentials(provisioning_status)
+  where provisioning_status in ('pending','failed');
+
+-- Update the partial UNIQUE index to consider status (active + non-revoked only)
+drop index if exists device_credentials_active_uniq;
+create unique index if not exists device_credentials_active_uniq
+  on public.device_credentials(device_id)
+  where revoked_at is null and provisioning_status in ('pending','active');
+```
+
+**Status machine:**
+```
+create → 'pending' (manual mode: immediately 'active' after DB write;
+                    automatic mode: 'active' after HiveMQ REST 200, else 'failed')
+active → revoke → 'revoked' + revoked_at=now()
+active → rotate → new row 'active', old row 'revoked'
+pending → API 5xx retry → 'active' or 'failed'
+failed → manual delete or retry
+```
+
+**Backward compat:** existing rows default `provisioning_status='active'` — Phase 4.1-4.3 rows continue working. No production disruption.
+
+**Rerun-safe:** `if not exists` + `drop index if exists` — Section 23 runnable anytime.
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
