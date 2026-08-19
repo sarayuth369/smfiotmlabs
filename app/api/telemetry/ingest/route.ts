@@ -149,23 +149,37 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Resolve device + owner chain. If caller (bridge) provided customer_identity_id
-  // from the MQTT topic, cross-check against actual device owner — reject mismatch.
+  // Resolve device — simple lookup by device_uid. Ownership cross-check
+  // done as separate query only when caller provided customer_identity_id.
   const { data: device, error: devErr } = await admin
     .from("iot_nodes")
-    .select("id, is_disabled, archived_at, farm_id, farms!inner(user_id, profiles!inner(customer_identity_id))")
+    .select("id, is_disabled, archived_at, farm_id")
     .eq("device_uid", body.device_uid)
     .maybeSingle();
-  if (devErr || !device) return json({ ok: false, error: "unknown device" }, 404);
+  if (devErr || !device) {
+    console.warn("[ingest] unknown device", body.device_uid, devErr?.message);
+    return json({ ok: false, error: "unknown device" }, 404);
+  }
   if (device.is_disabled) return json({ ok: false, error: "device disabled" }, 403);
   if (device.archived_at) return json({ ok: false, error: "device archived" }, 403);
 
-  // Ownership cross-check (multi-tenant safety) — only enforced when bridge sent it
+  // Ownership cross-check (multi-tenant safety) — 2-step resolve to avoid
+  // fragile PostgREST embeds. Only enforced when bridge sent customer_identity_id.
   if (body.customer_identity_id) {
-    const farmsRel = (device as unknown as { farms?: { profiles?: { customer_identity_id?: string | null } } | { profiles?: { customer_identity_id?: string | null } }[] }).farms;
-    const farm = Array.isArray(farmsRel) ? farmsRel[0] : farmsRel;
-    const profile = Array.isArray(farm?.profiles) ? farm.profiles[0] : farm?.profiles;
-    const actualCustomerId = profile?.customer_identity_id ?? null;
+    const { data: farm } = await admin
+      .from("farms")
+      .select("user_id")
+      .eq("id", device.farm_id as string)
+      .maybeSingle();
+    let actualCustomerId: string | null = null;
+    if (farm?.user_id) {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("customer_identity_id")
+        .eq("id", farm.user_id as string)
+        .maybeSingle();
+      actualCustomerId = (prof?.customer_identity_id as string | null) ?? null;
+    }
     if (!actualCustomerId || actualCustomerId !== body.customer_identity_id) {
       console.warn(
         "[security] ownership mismatch",
