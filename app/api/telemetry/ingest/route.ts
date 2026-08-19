@@ -11,6 +11,13 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { evaluateReadingAgainstRules } from "@/lib/automation";
+import {
+  checkDeviceRateLimit,
+  checkCustomerRateLimit,
+  checkIpRateLimit,
+  checkInvalidRequestLimit,
+  RATE_LIMIT_CONFIG,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +45,8 @@ type Payload = {
   payload?: unknown;
 };
 
-function json(body: unknown, status: number = 200) {
-  return NextResponse.json(body, { status });
+function json(body: unknown, status: number = 200, headers?: Record<string, string>) {
+  return NextResponse.json(body, { status, headers });
 }
 
 function verifySignature(rawBody: string, header: string | null, secret: string): boolean {
@@ -55,9 +62,31 @@ export async function POST(req: Request) {
   const secret = process.env.TELEMETRY_INGEST_SECRET;
   if (!secret) return json({ ok: false, error: "server misconfigured" }, 500);
 
+  // IP for invalid-request throttling (from Vercel edge / reverse proxy)
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
+
   const rawBody = await req.text();
+
+  // Enforce max payload BEFORE any expensive work
+  if (rawBody.length > RATE_LIMIT_CONFIG.maxPayloadBytes) {
+    await checkInvalidRequestLimit(ip); // count against abuse bucket
+    return json({ ok: false, error: "payload too large" }, 413);
+  }
+
   const sig = req.headers.get("x-ingest-signature");
   if (!verifySignature(rawBody, sig, secret)) {
+    // Auth failure — hit invalid bucket (aggressive limit to stop credential-guessing flood)
+    const invalid = await checkInvalidRequestLimit(ip);
+    if (!invalid.ok) {
+      return json(
+        { ok: false, error: "too many invalid requests" },
+        429,
+        { "retry-after": String(invalid.retryAfterSec) }
+      );
+    }
     return json({ ok: false, error: "unauthorized" }, 401);
   }
 
@@ -70,6 +99,38 @@ export async function POST(req: Request) {
 
   if (!body.device_uid || !body.occurred_at) {
     return json({ ok: false, error: "missing device_uid / occurred_at" }, 400);
+  }
+
+  // Rate limit — per-IP (Bridge IP), per-device, per-customer.
+  // Priority: device most specific, IP catches bridge misbehavior, customer caps whole tenant.
+  const ipLimit = await checkIpRateLimit(ip);
+  if (!ipLimit.ok) {
+    console.warn("[rate-limit] ip throttled", ip);
+    return json(
+      { ok: false, error: "rate limit exceeded" },
+      429,
+      { "retry-after": String(ipLimit.retryAfterSec) }
+    );
+  }
+  const deviceLimit = await checkDeviceRateLimit(body.device_uid);
+  if (!deviceLimit.ok) {
+    console.warn("[rate-limit] device throttled", body.device_uid);
+    return json(
+      { ok: false, error: "rate limit exceeded" },
+      429,
+      { "retry-after": String(deviceLimit.retryAfterSec) }
+    );
+  }
+  if (body.customer_identity_id) {
+    const custLimit = await checkCustomerRateLimit(body.customer_identity_id);
+    if (!custLimit.ok) {
+      console.warn("[rate-limit] customer throttled", body.customer_identity_id);
+      return json(
+        { ok: false, error: "rate limit exceeded" },
+        429,
+        { "retry-after": String(custLimit.retryAfterSec) }
+      );
+    }
   }
   const isStatusOnly = !body.readings || body.readings.length === 0;
   if (!isStatusOnly && body.readings!.length > 100) {
