@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateDeviceCredential } from "@/lib/device-auth";
+import { createDeviceCredential, toCredentialMetadata } from "@/lib/mqtt-credential";
 
 /**
  * Regenerate MQTT credential for a device.
@@ -16,7 +16,16 @@ import { generateDeviceCredential } from "@/lib/device-auth";
  */
 export async function regenerateDeviceCredential(
   deviceId: string
-): Promise<{ ok: true; mqtt_username: string; mqtt_password: string } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      mqtt_username: string;
+      mqtt_password: string;
+      broker_registered?: boolean;
+      manual_instruction?: string;
+    }
+  | { ok: false; error: string }
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,7 +41,13 @@ export async function regenerateDeviceCredential(
   if (!device) return { ok: false, error: "device not found" };
 
   const admin = createAdminClient();
-  const cred = await generateDeviceCredential(device.device_uid as string);
+
+  // Delegate to broker-agnostic adapter (manual now, automatic when Starter tier set).
+  // Manual mode = hash-only storage + admin must mirror to HiveMQ Dashboard.
+  // Automatic mode (future) = adapter calls broker REST API + creates ACL.
+  const { credential, brokerRegistered, manualInstruction } =
+    await createDeviceCredential(device.device_uid as string);
+  const meta = toCredentialMetadata(credential);
 
   // Revoke any existing active credential (partial unique index enforces one active per device)
   await admin
@@ -41,13 +56,12 @@ export async function regenerateDeviceCredential(
     .eq("device_id", deviceId)
     .is("revoked_at", null);
 
-  // Insert new active credential
   const { error: insErr } = await admin.from("device_credentials").insert({
     device_id: deviceId,
-    mqtt_username: cred.mqtt_username,
-    mqtt_password_hash: cred.mqtt_password_hash,
-    mqtt_password_prefix: cred.mqtt_password_prefix,
-    mqtt_password_last4: cred.mqtt_password.slice(-4),
+    mqtt_username: meta.mqtt_username,
+    mqtt_password_hash: meta.mqtt_password_hash,
+    mqtt_password_prefix: meta.mqtt_password_prefix,
+    mqtt_password_last4: meta.mqtt_password_last4,
     created_by: user.id,
   });
   if (insErr) {
@@ -58,8 +72,10 @@ export async function regenerateDeviceCredential(
   revalidatePath(`/dashboard/devices/${deviceId}/mqtt`);
   return {
     ok: true,
-    mqtt_username: cred.mqtt_username,
-    mqtt_password: cred.mqtt_password,
+    mqtt_username: credential.mqtt_username,
+    mqtt_password: credential.mqtt_password,
+    broker_registered: brokerRegistered,
+    manual_instruction: manualInstruction,
   };
 }
 
