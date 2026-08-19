@@ -26,7 +26,16 @@ type Reading = {
 type Payload = {
   device_uid: string;
   occurred_at: string;
-  readings: Reading[];
+  readings?: Reading[];
+  // New multi-tenant fields (Phase 4.3) — optional for legacy compat
+  customer_identity_id?: string | null;
+  topic_namespace?: "legacy" | "new" | null;
+  event_type?: string | null;
+  status?: string | null;
+  firmware_version?: string | null;
+  metadata?: Record<string, unknown> | null;
+  response?: unknown;
+  payload?: unknown;
 };
 
 function json(body: unknown, status: number = 200) {
@@ -59,11 +68,15 @@ export async function POST(req: Request) {
     return json({ ok: false, error: "invalid json" }, 400);
   }
 
-  if (!body.device_uid || !body.occurred_at || !Array.isArray(body.readings) || body.readings.length === 0) {
-    return json({ ok: false, error: "missing device_uid / occurred_at / readings" }, 400);
+  if (!body.device_uid || !body.occurred_at) {
+    return json({ ok: false, error: "missing device_uid / occurred_at" }, 400);
   }
-  if (body.readings.length > 100) {
+  const isStatusOnly = !body.readings || body.readings.length === 0;
+  if (!isStatusOnly && body.readings!.length > 100) {
     return json({ ok: false, error: "batch too large (max 100)" }, 400);
+  }
+  if (isStatusOnly && !body.event_type) {
+    return json({ ok: false, error: "missing readings or event_type" }, 400);
   }
 
   // Basic timestamp sanity — reject > 5 min in future or > 30 days in past
@@ -75,14 +88,63 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
+  // Resolve device + owner chain. If caller (bridge) provided customer_identity_id
+  // from the MQTT topic, cross-check against actual device owner — reject mismatch.
   const { data: device, error: devErr } = await admin
     .from("iot_nodes")
-    .select("id, is_disabled, archived_at")
+    .select("id, is_disabled, archived_at, farm_id, farms!inner(user_id, profiles!inner(customer_identity_id))")
     .eq("device_uid", body.device_uid)
     .maybeSingle();
   if (devErr || !device) return json({ ok: false, error: "unknown device" }, 404);
   if (device.is_disabled) return json({ ok: false, error: "device disabled" }, 403);
   if (device.archived_at) return json({ ok: false, error: "device archived" }, 403);
+
+  // Ownership cross-check (multi-tenant safety) — only enforced when bridge sent it
+  if (body.customer_identity_id) {
+    const farmsRel = (device as unknown as { farms?: { profiles?: { customer_identity_id?: string | null } } | { profiles?: { customer_identity_id?: string | null } }[] }).farms;
+    const farm = Array.isArray(farmsRel) ? farmsRel[0] : farmsRel;
+    const profile = Array.isArray(farm?.profiles) ? farm.profiles[0] : farm?.profiles;
+    const actualCustomerId = profile?.customer_identity_id ?? null;
+    if (!actualCustomerId || actualCustomerId !== body.customer_identity_id) {
+      console.warn(
+        "[security] ownership mismatch",
+        "topic_customer=",
+        body.customer_identity_id,
+        "actual_customer=",
+        actualCustomerId,
+        "device_uid=",
+        body.device_uid
+      );
+      return json({ ok: false, error: "customer/device ownership mismatch" }, 403);
+    }
+  }
+
+  // Status-only event (heartbeat / connect / disconnect) — update last_seen + optional firmware
+  if (isStatusOnly) {
+    const patch: Record<string, unknown> = {
+      last_seen: new Date().toISOString(),
+    };
+    if (body.status === "online" || body.status === "offline" || body.status === "warning") {
+      patch.status = body.status;
+    } else {
+      patch.status = "online"; // any event = device is alive
+    }
+    if (typeof body.firmware_version === "string") {
+      patch.firmware_version = body.firmware_version;
+    }
+    await admin.from("iot_nodes").update(patch).eq("id", device.id);
+    await admin.from("device_events").insert({
+      device_id: device.id,
+      event_type: body.event_type ?? "heartbeat",
+      payload: { status: body.status, metadata: body.metadata ?? null },
+    });
+    return json({
+      ok: true,
+      device_uid: body.device_uid,
+      event: body.event_type,
+      status_updated: true,
+    });
+  }
 
   // Resolve sensor identity per (sensor_type, channel) → sensors.id (active only)
   const { data: sensorRows } = await admin
@@ -103,7 +165,7 @@ export async function POST(req: Request) {
   const rows: Row[] = [];
   const rejected: { reading: Reading; reason: string }[] = [];
 
-  for (const r of body.readings) {
+  for (const r of body.readings!) {
     if (typeof r.value !== "number" || !Number.isFinite(r.value)) {
       rejected.push({ reading: r, reason: "invalid value" });
       continue;
