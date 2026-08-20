@@ -5,9 +5,12 @@ import { formatThaiDate } from "@/lib/payment";
 import { CopyRow } from "./_components/CopyRow";
 import { RegenerateButton } from "./_components/RegenerateButton";
 
-const HIVEMQ_HOST = "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud";
-const HIVEMQ_PORT_TLS = 8883;
-const HIVEMQ_PORT_WS = 8884;
+// Broker config — env-driven so migration HiveMQ → self-hosted EMQX = 1 env change, no code change
+const HIVEMQ_HOST =
+  process.env.NEXT_PUBLIC_MQTT_BROKER_HOST ??
+  "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud";
+const HIVEMQ_PORT_TLS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_TLS_PORT ?? "8883", 10);
+const HIVEMQ_PORT_WS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_WS_PORT ?? "8084", 10);
 
 export default async function DeviceMqttPage({
   params,
