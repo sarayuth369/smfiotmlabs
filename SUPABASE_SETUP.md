@@ -2329,6 +2329,174 @@ failed → manual delete or retry
 
 ---
 
+## 24. Firmware Management (Special Phase 5.0)
+
+Firmware release registry + OTA job tracking. Files hosted in Supabase Storage bucket `firmware` (private, service-role write, signed-URL read).
+
+```sql
+-- ============================================================
+-- 24.1  firmware_releases — versioned firmware artifacts (admin-created)
+-- ============================================================
+create table if not exists public.firmware_releases (
+  id uuid primary key default gen_random_uuid(),
+  version text not null,                     -- semver: 1.2.3
+  build text,                                 -- optional build tag: 20260819
+  board text not null,                        -- e.g. ESP32-S3
+  hardware_model text not null,               -- e.g. SMF-MAIN-V1
+  release_channel text not null default 'test'
+    check (release_channel in ('test','stable','deprecated','revoked')),
+
+  -- Storage: individual artifacts stored separately (bootloader/partitions/firmware/optional others)
+  bootloader_path text,                       -- storage://firmware/{id}/bootloader.bin
+  bootloader_offset int not null default 0,   -- 0x0 for ESP32-S3
+  partitions_path text,                       -- storage://firmware/{id}/partitions.bin
+  partitions_offset int not null default 32768,   -- 0x8000
+  app_path text not null,                     -- storage://firmware/{id}/firmware.bin  — REQUIRED
+  app_offset int not null default 65536,      -- 0x10000
+
+  file_size bigint not null check (file_size > 0),   -- total sum of artifacts
+  sha256_app text not null check (length(sha256_app) = 64),
+  sha256_manifest text,                       -- optional composite hash
+
+  min_firmware_version text,                  -- OTA compatibility floor
+  release_notes text,
+  is_latest boolean not null default false,
+
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  approved_at timestamptz,
+  approved_by uuid references auth.users(id) on delete set null
+);
+
+create unique index if not exists firmware_releases_version_board_uniq
+  on public.firmware_releases (version, board, hardware_model);
+
+-- Only 1 is_latest=true per (hardware_model, channel)
+create unique index if not exists firmware_releases_latest_uniq
+  on public.firmware_releases (hardware_model, release_channel)
+  where is_latest = true;
+
+create index if not exists firmware_releases_channel_idx on public.firmware_releases(release_channel);
+create index if not exists firmware_releases_model_idx on public.firmware_releases(hardware_model);
+
+drop trigger if exists firmware_releases_set_updated_at on public.firmware_releases;
+create trigger firmware_releases_set_updated_at
+  before update on public.firmware_releases
+  for each row execute function public.set_updated_at();
+
+alter table public.firmware_releases enable row level security;
+
+-- User (authenticated) can SELECT approved releases matching their device hardware
+drop policy if exists "firmware_releases_select_approved" on public.firmware_releases;
+create policy "firmware_releases_select_approved" on public.firmware_releases for select using (
+  release_channel in ('test','stable','deprecated') and approved_at is not null and (
+    hardware_model in (
+      select distinct n.hardware_model
+      from public.iot_nodes n
+      join public.farms f on f.id = n.farm_id
+      where f.user_id = auth.uid() and n.hardware_model is not null
+    )
+    OR
+    hardware_model = 'ESP32-S3'   -- fallback: allow generic S3 releases visible to all
+  )
+);
+-- INSERT/UPDATE/DELETE = service_role only (admin backend)
+
+-- ============================================================
+-- 24.2  firmware_update_jobs — per-device OTA state machine
+-- ============================================================
+create table if not exists public.firmware_update_jobs (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.iot_nodes(id) on delete cascade,
+  firmware_release_id uuid not null references public.firmware_releases(id) on delete restrict,
+  requested_by uuid references auth.users(id) on delete set null,
+  method text not null default 'ota' check (method in ('ota','usb')),
+  state text not null default 'requested'
+    check (state in (
+      'requested','downloading','verifying','installing','rebooting',
+      'health_check','success','failed','rolled_back','cancelled','timeout'
+    )),
+  from_version text,
+  to_version text not null,
+  progress smallint check (progress is null or (progress between 0 and 100)),
+  error_message text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Prevent duplicate active job per device
+create unique index if not exists firmware_update_jobs_active_uniq
+  on public.firmware_update_jobs (device_id)
+  where state in ('requested','downloading','verifying','installing','rebooting','health_check');
+
+create index if not exists firmware_update_jobs_device_created_idx
+  on public.firmware_update_jobs(device_id, created_at desc);
+create index if not exists firmware_update_jobs_state_idx
+  on public.firmware_update_jobs(state);
+
+drop trigger if exists firmware_update_jobs_set_updated_at on public.firmware_update_jobs;
+create trigger firmware_update_jobs_set_updated_at
+  before update on public.firmware_update_jobs
+  for each row execute function public.set_updated_at();
+
+alter table public.firmware_update_jobs enable row level security;
+
+drop policy if exists "firmware_update_jobs_select_own" on public.firmware_update_jobs;
+create policy "firmware_update_jobs_select_own" on public.firmware_update_jobs for select using (
+  exists (
+    select 1 from public.iot_nodes n
+    join public.farms f on f.id = n.farm_id
+    where n.id = firmware_update_jobs.device_id and f.user_id = auth.uid()
+  )
+);
+-- INSERT/UPDATE = service_role only (server action + worker acks)
+
+-- ============================================================
+-- 24.3  Storage bucket 'firmware' — create manually in Supabase Dashboard
+-- ============================================================
+-- Dashboard → Storage → New bucket
+--   Name: firmware
+--   Public: NO
+--   File size limit: 16 MB
+--   Allowed MIME: application/octet-stream
+--
+-- Policies: no user policies. Service-role writes via server action.
+-- Signed URL (60s TTL) used for both USB flash download AND OTA download.
+```
+
+**Rerun-safe:** all `if not exists`, `if exists` — Section 24 runnable anytime.
+
+**Firmware manifest** — stored inline in `firmware_releases` row, exposed as JSON via server action:
+```json
+{
+  "release_id": "uuid",
+  "version": "0.1.0",
+  "build": "20260819",
+  "board": "ESP32-S3",
+  "hardware_model": "SMF-MAIN-V1",
+  "channel": "test",
+  "artifacts": [
+    { "role": "bootloader", "offset": 0,       "url": "signed_url", "size": 15104, "sha256": "..." },
+    { "role": "partitions", "offset": 32768,   "url": "signed_url", "size": 3072,  "sha256": "..." },
+    { "role": "app",        "offset": 65536,   "url": "signed_url", "size": 1048576,"sha256": "..." }
+  ],
+  "sha256_app": "...",
+  "min_firmware_version": null,
+  "release_notes": "..."
+}
+```
+
+**Flash addresses (ESP32-S3 default Arduino partitions, verified from user's `.pio/build/esp32-s3-devkitc-1/`):**
+- `0x0000` bootloader.bin
+- `0x8000` partitions.bin
+- `0xe000` boot_app0.bin (optional — OTA data init)
+- `0x10000` firmware.bin (app slot 0)
+
+---
+
 ## 17. `.env.local`
 
 ต้องมีคีย์เหล่านี้:
