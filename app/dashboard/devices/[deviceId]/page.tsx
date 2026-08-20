@@ -36,7 +36,7 @@ const SUBNAV = [
   { key: "overview", label: "Overview", active: true },
   { key: "sensors", label: "Sensors" },
   { key: "control", label: "Control", soon: true },
-  { key: "firmware", label: "Firmware", soon: true },
+  { key: "firmware", label: "Firmware" },
   { key: "mqtt", label: "MQTT" },
 ];
 
@@ -176,7 +176,13 @@ export default async function DeviceDetailPage({
         <div className="flex items-center gap-1 min-w-max">
           {SUBNAV.map((n) => {
             const linkHref =
-              n.key === "sensors" ? "#sensors" : n.key === "mqtt" ? `/dashboard/devices/${deviceId}/mqtt` : null;
+              n.key === "sensors"
+                ? "#sensors"
+                : n.key === "mqtt"
+                  ? `/dashboard/devices/${deviceId}/mqtt`
+                  : n.key === "firmware"
+                    ? `/dashboard/devices/${deviceId}/flash`
+                    : null;
             const cls = `px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
               n.active
                 ? "text-brand-800 border-b-2 border-brand-600"

@@ -1,6 +1,8 @@
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/payment";
+import { UploadForm } from "./_components/UploadForm";
+import { RowActions } from "./_components/RowActions";
 
 type FirmwareRow = {
   id: string;
@@ -39,11 +41,12 @@ export default async function AdminFirmwarePage() {
         <div className="text-xs text-brand-700/70 font-medium">การจัดการ</div>
         <h1 className="text-2xl font-bold text-brand-800">Firmware Releases</h1>
         <p className="text-sm text-brand-900/60 mt-1">
-          จัดการ firmware สำหรับ ESP32 — สร้าง release / อนุมัติ / ตั้ง latest
+          Upload firmware artifacts → approve → set latest — user จะเห็น release ที่ approved + compatible กับ device ของตัวเอง
         </p>
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-900">
-          <strong>Phase 5.0 (POC):</strong> การ upload artifact + Web USB flasher UI จะเปิดใน Phase 5.1 — ตอนนี้ dashboard แสดง release ที่ insert ผ่าน SQL หรือ server action เท่านั้น
-        </div>
+      </div>
+
+      <div className="mb-6">
+        <UploadForm />
       </div>
 
       {releases.length === 0 ? (
@@ -51,7 +54,7 @@ export default async function AdminFirmwarePage() {
           <div className="text-5xl">📦</div>
           <div className="mt-3 font-semibold text-brand-800">ยังไม่มี Firmware Release</div>
           <p className="mt-1 text-sm text-brand-900/60">
-            สร้าง release แรกผ่าน SQL Editor ตาม instruction ใน docs/esp32-firmware-management.md
+            Upload firmware ตัวแรกที่ฟอร์มด้านบน
           </p>
         </div>
       ) : (
@@ -66,6 +69,7 @@ export default async function AdminFirmwarePage() {
                 <th className="px-4 py-3">SHA256</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-100">
@@ -105,6 +109,14 @@ export default async function AdminFirmwarePage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-brand-900/60">
                     {formatThaiDate(r.created_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <RowActions
+                      releaseId={r.id}
+                      approved={!!r.approved_at}
+                      isLatest={r.is_latest}
+                      isDeprecated={r.release_channel === "deprecated" || r.release_channel === "revoked"}
+                    />
                   </td>
                 </tr>
               ))}

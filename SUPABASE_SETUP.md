@@ -2455,19 +2455,55 @@ create policy "firmware_update_jobs_select_own" on public.firmware_update_jobs f
 -- INSERT/UPDATE = service_role only (server action + worker acks)
 
 -- ============================================================
--- 24.3  Storage bucket 'firmware' — create manually in Supabase Dashboard
+-- 24.3  Extend firmware_releases with per-artifact SHA + boot_app0 (Phase 5.1)
+-- ============================================================
+alter table public.firmware_releases
+  add column if not exists sha256_bootloader text,
+  add column if not exists sha256_partitions text,
+  add column if not exists boot_app0_path text,
+  add column if not exists boot_app0_offset int not null default 57344,   -- 0xe000
+  add column if not exists sha256_boot_app0 text;
+
+-- Optional integrity constraint (nullable — legacy rows may lack them)
+alter table public.firmware_releases
+  drop constraint if exists firmware_releases_sha_lengths_chk;
+alter table public.firmware_releases
+  add constraint firmware_releases_sha_lengths_chk check (
+    (sha256_bootloader is null or length(sha256_bootloader) = 64) and
+    (sha256_partitions is null or length(sha256_partitions) = 64) and
+    (sha256_boot_app0  is null or length(sha256_boot_app0)  = 64)
+  );
+
+-- ============================================================
+-- 24.4  Extend firmware_update_jobs.method for USB flashing (Phase 5.1)
+-- ============================================================
+-- (`method` column already exists in Section 24.2; ensure default + check accepts 'usb')
+-- No schema change needed — Section 24.2 already declares:
+--   method text not null default 'ota' check (method in ('ota','usb'))
+
+-- ============================================================
+-- 24.5  Storage bucket 'firmware' — MANUAL step in Supabase Dashboard
 -- ============================================================
 -- Dashboard → Storage → New bucket
---   Name: firmware
---   Public: NO
---   File size limit: 16 MB
---   Allowed MIME: application/octet-stream
+--   Name:              firmware
+--   Public bucket:     NO   ← MUST BE PRIVATE
+--   File size limit:   16 MB
+--   Allowed MIME:      application/octet-stream
 --
--- Policies: no user policies. Service-role writes via server action.
--- Signed URL (60s TTL) used for both USB flash download AND OTA download.
+-- Then in Dashboard → Storage → firmware → Policies:
+--   Leave EMPTY. No user-facing policy needed.
+--   All read/write goes through service_role via server actions:
+--     - createSignedUploadUrl()  → admin upload
+--     - createSignedUrl(60)      → user download (USB flash / OTA)
+--
+-- Security invariant:
+--   - Bucket is private (never public).
+--   - Client NEVER receives service_role key.
+--   - Every signed URL expires ≤ 60 seconds.
+--   - Path pattern is immutable per release: firmware/{release_id}/{filename}.
 ```
 
-**Rerun-safe:** all `if not exists`, `if exists` — Section 24 runnable anytime.
+**Rerun-safe:** all `if not exists`, `if exists`, `drop constraint if exists` — Section 24.3 / 24.4 runnable anytime.
 
 **Firmware manifest** — stored inline in `firmware_releases` row, exposed as JSON via server action:
 ```json
