@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { canCreateNode } from "@/lib/plan-limits";
-import { DeviceForm } from "../_components/DeviceForm";
+import { ProvisionDeviceForm } from "../_components/ProvisionDeviceForm";
 import { PlanLimitNotice } from "../../farms/_components/PlanLimitNotice";
-import { createDevice } from "../actions";
 
 export default async function NewDevicePage({
   searchParams,
@@ -86,13 +85,11 @@ export default async function NewDevicePage({
             </Link>
           </div>
         ) : (
-          <DeviceForm
-            action={createDevice}
+          <ProvisionDeviceForm
             farms={farmList}
             zones={zoneList}
-            submitLabel="ลงทะเบียนอุปกรณ์"
-            cancelHref="/dashboard/devices"
-            initial={{ farm_id: preFarm, zone_id: preZone ?? null }}
+            initialFarmId={preFarm}
+            initialZoneId={preZone ?? null}
           />
         )}
       </div>

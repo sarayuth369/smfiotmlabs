@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { canCreateNode } from "@/lib/plan-limits";
+import {
+  generateUniqueDeviceUid,
+  generateDeviceCredentials,
+  buildSecretsHFile,
+  buildEmqxActivationCommand,
+  type ProvisionedCredentials,
+} from "@/lib/device-provision";
 
 const DEVICE_UID_RE = /^[A-Z0-9][A-Z0-9\-_]{2,63}$/i;
 
@@ -185,6 +193,161 @@ export async function restoreDevice(deviceId: string): Promise<void> {
   revalidatePath(`/dashboard/devices/${deviceId}`);
   revalidatePath(`/dashboard/farms/${current.farm_id}/devices`);
   redirect(`/dashboard/devices/${deviceId}`);
+}
+
+/**
+ * Phase 6.2 PROVISIONING — register a device with server-generated
+ * unique device_uid + MQTT credentials + narrow ACL topic prefix.
+ *
+ * Returns the plaintext MQTT password ONCE for immediate download.
+ * After this call, only the bcrypt hash is retained.
+ *
+ * Steps:
+ *  1. Validate ownership, farm, zone, plan limits.
+ *  2. Resolve customer_identity_id (from profile).
+ *  3. Generate unique SMF-XXXXXX device_uid (server, collision-checked).
+ *  4. Generate 32-char random MQTT password + bcrypt hash.
+ *  5. Insert iot_nodes row.
+ *  6. Insert device_credentials row (hash + prefix + topic_prefix).
+ *  7. Return credentials + secrets.h content + VPS activation command.
+ *
+ * ROLLBACK on failure: if step 6 fails, deletes iot_nodes row inserted
+ * in step 5 (cascade cleans nothing else since credential not yet stored).
+ */
+export type ProvisionResult =
+  | {
+      ok: true;
+      device_id: string;
+      device_uid: string;
+      mqtt_username: string;
+      mqtt_password: string; // plaintext — ONE TIME
+      mqtt_topic_prefix: string;
+      customer_identity_id: string;
+      secrets_h_content: string;
+      emqx_activation_command: string;
+    }
+  | { ok: false; error: string };
+
+export async function provisionDevice(formData: FormData): Promise<ProvisionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not authenticated" };
+
+  const farm_id = String(formData.get("farm_id") ?? "").trim();
+  if (!farm_id) return { ok: false, error: "กรุณาเลือกฟาร์ม" };
+
+  try {
+    await requireOwnedFarm(supabase, user.id, farm_id);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  const check = await canCreateNode(supabase, user.id);
+  if (!check.ok) return { ok: false, error: check.reason ?? "เกินโควตาแพ็กเกจ" };
+
+  let common: ReturnType<typeof parseCommonFields>;
+  try {
+    common = parseCommonFields(formData);
+    await validateZoneInFarm(supabase, common.zone_id, farm_id);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  // Resolve customer_identity_id via profile row
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("customer_identity_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  const customer_identity_id = (profile?.customer_identity_id as string | null) ?? null;
+  if (!customer_identity_id) {
+    return {
+      ok: false,
+      error: "profile ยังไม่มี customer_identity_id — โปรดติดต่อผู้ดูแล",
+    };
+  }
+
+  // Use admin client for device_credentials (RLS restricts writes to service_role)
+  const admin = createAdminClient();
+
+  // Step 3: generate unique device_uid
+  let device_uid: string;
+  try {
+    device_uid = await generateUniqueDeviceUid(admin);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  // Step 4: generate credentials
+  let creds: ProvisionedCredentials;
+  try {
+    creds = await generateDeviceCredentials(device_uid, customer_identity_id);
+  } catch (e) {
+    return { ok: false, error: "credential generation failed: " + (e as Error).message };
+  }
+
+  // Step 5: insert iot_nodes (use user session client so RLS enforces ownership)
+  const { data: nodeRow, error: nodeErr } = await supabase
+    .from("iot_nodes")
+    .insert({
+      device_uid,
+      device_name: common.device_name,
+      device_type: common.device_type,
+      model: common.model,
+      firmware_version: common.firmware_version,
+      farm_id,
+      zone_id: common.zone_id,
+      hardware_model: "SMF-MAIN-V1",
+    })
+    .select("id")
+    .single();
+
+  if (nodeErr || !nodeRow) {
+    if (nodeErr?.code === "23505") {
+      return { ok: false, error: "device_uid ชนกัน — ลองอีกครั้ง" };
+    }
+    return { ok: false, error: "insert iot_nodes failed: " + (nodeErr?.message ?? "unknown") };
+  }
+
+  const device_id = nodeRow.id as string;
+
+  // Step 6: insert device_credentials (service_role bypasses RLS)
+  const { error: credErr } = await admin.from("device_credentials").insert({
+    device_id,
+    mqtt_username: creds.mqtt_username,
+    mqtt_password_hash: creds.mqtt_password_hash,
+    mqtt_password_prefix: creds.mqtt_password_prefix,
+    mqtt_topic_prefix: creds.mqtt_topic_prefix,
+    provisioning_status: "pending",
+    created_by: user.id,
+  });
+
+  if (credErr) {
+    // ROLLBACK: delete iot_nodes row so retry gets fresh device_uid
+    await admin.from("iot_nodes").delete().eq("id", device_id);
+    return {
+      ok: false,
+      error: "insert device_credentials failed: " + credErr.message + " (rolled back iot_nodes)",
+    };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/devices");
+  revalidatePath(`/dashboard/farms/${farm_id}`);
+
+  return {
+    ok: true,
+    device_id,
+    device_uid,
+    mqtt_username: creds.mqtt_username,
+    mqtt_password: creds.mqtt_password,
+    mqtt_topic_prefix: creds.mqtt_topic_prefix,
+    customer_identity_id,
+    secrets_h_content: buildSecretsHFile(creds, customer_identity_id),
+    emqx_activation_command: buildEmqxActivationCommand(creds, customer_identity_id),
+  };
 }
 
 export async function deleteDevice(deviceId: string): Promise<void> {
