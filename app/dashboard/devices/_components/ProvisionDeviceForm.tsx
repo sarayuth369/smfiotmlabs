@@ -29,7 +29,9 @@ export function ProvisionDeviceForm({
   const [result, setResult] = useState<ProvisionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (fd: FormData) => {
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
     setError(null);
     setResult(null);
     startTransition(async () => {
@@ -144,7 +146,7 @@ export function ProvisionDeviceForm({
   }
 
   return (
-    <form action={onSubmit} className="card p-6 sm:p-8 space-y-5">
+    <form onSubmit={onSubmit} className="card p-6 sm:p-8 space-y-5">
       <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4 text-xs text-brand-900/80">
         <strong>Phase 6 Multi-Tenant Provisioning:</strong> Device UID + MQTT password จะสร้างอัตโนมัติ. ระบบจะแสดง credentials ครั้งเดียวหลัง register — ต้อง download <code>secrets.h</code> ทันที
       </div>
