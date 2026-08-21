@@ -116,19 +116,71 @@ export function buildSecretsHFile(creds: ProvisionedCredentials, customer_identi
 
 /**
  * Build shell command the operator runs on VPS to activate the device
- * in EMQX (creates MQTT user + narrow ACL). One-liner, safe to run
- * multiple times (idempotent via HTTP 201/409).
+ * in EMQX (fallback if webhook unavailable). Idempotent.
  */
 export function buildEmqxActivationCommand(
   creds: ProvisionedCredentials,
   customer_identity_id: string
 ): string {
-  // NOTE: Password is passed inline. Operator should run this via SSH
-  // (encrypted channel) and clear shell history afterwards.
   return [
     "sudo /opt/smf-iot/emqx/create-device.sh",
     "'" + creds.device_uid + "'",
     "'" + creds.mqtt_password + "'",
     "'" + customer_identity_id + "'",
   ].join(" ");
+}
+
+/**
+ * Call the provisioning webhook on the VPS to auto-create EMQX user + ACL.
+ * Requires env vars PROV_WEBHOOK_URL + PROV_WEBHOOK_TOKEN.
+ * Returns {ok:true} on success (idempotent — safe to retry).
+ */
+export type WebhookActivationResult =
+  | { ok: true; user: string; acl_rules: number; cached?: boolean }
+  | { ok: false; error: string };
+
+export async function activateOnEmqxWebhook(
+  creds: ProvisionedCredentials,
+  customer_identity_id: string
+): Promise<WebhookActivationResult> {
+  const url = process.env.PROV_WEBHOOK_URL;
+  const token = process.env.PROV_WEBHOOK_TOKEN;
+  if (!url || !token) {
+    return { ok: false, error: "PROV_WEBHOOK_URL / PROV_WEBHOOK_TOKEN not configured" };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        op: "provision-device",
+        device_uid: creds.device_uid,
+        mqtt_password: creds.mqtt_password,
+        customer_uuid: customer_identity_id,
+      }),
+      signal: controller.signal,
+    });
+    const body: unknown = await res.json().catch(() => ({}));
+    const bodyObj = body as { ok?: boolean; error?: string; user?: string; acl_rules?: number; cached?: boolean };
+    if (!res.ok || !bodyObj.ok) {
+      return { ok: false, error: bodyObj.error ?? "webhook http " + res.status };
+    }
+    return {
+      ok: true,
+      user: bodyObj.user ?? "unknown",
+      acl_rules: bodyObj.acl_rules ?? 0,
+      cached: bodyObj.cached,
+    };
+  } catch (e) {
+    return { ok: false, error: "webhook call failed: " + (e as Error).message };
+  } finally {
+    clearTimeout(timeout);
+  }
 }

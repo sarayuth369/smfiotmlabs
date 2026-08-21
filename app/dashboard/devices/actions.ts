@@ -10,6 +10,7 @@ import {
   generateDeviceCredentials,
   buildSecretsHFile,
   buildEmqxActivationCommand,
+  activateOnEmqxWebhook,
   type ProvisionedCredentials,
 } from "@/lib/device-provision";
 
@@ -225,6 +226,9 @@ export type ProvisionResult =
       customer_identity_id: string;
       secrets_h_content: string;
       emqx_activation_command: string;
+      emqx_activation:
+        | { ok: true; user: string; acl_rules: number }
+        | { ok: false; error: string };
     }
   | { ok: false; error: string };
 
@@ -314,23 +318,48 @@ export async function provisionDevice(formData: FormData): Promise<ProvisionResu
   const device_id = nodeRow.id as string;
 
   // Step 6: insert device_credentials (service_role bypasses RLS)
-  const { error: credErr } = await admin.from("device_credentials").insert({
-    device_id,
-    mqtt_username: creds.mqtt_username,
-    mqtt_password_hash: creds.mqtt_password_hash,
-    mqtt_password_prefix: creds.mqtt_password_prefix,
-    mqtt_topic_prefix: creds.mqtt_topic_prefix,
-    provisioning_status: "pending",
-    created_by: user.id,
-  });
+  const { data: credRow, error: credErr } = await admin
+    .from("device_credentials")
+    .insert({
+      device_id,
+      mqtt_username: creds.mqtt_username,
+      mqtt_password_hash: creds.mqtt_password_hash,
+      mqtt_password_prefix: creds.mqtt_password_prefix,
+      mqtt_topic_prefix: creds.mqtt_topic_prefix,
+      provisioning_status: "pending",
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
 
-  if (credErr) {
+  if (credErr || !credRow) {
     // ROLLBACK: delete iot_nodes row so retry gets fresh device_uid
     await admin.from("iot_nodes").delete().eq("id", device_id);
     return {
       ok: false,
-      error: "insert device_credentials failed: " + credErr.message + " (rolled back iot_nodes)",
+      error: "insert device_credentials failed: " + (credErr?.message ?? "unknown") + " (rolled back iot_nodes)",
     };
+  }
+
+  const credential_id = credRow.id as string;
+
+  // Step 7: activate on EMQX via webhook (creates MQTT user + narrow ACL).
+  const activation = await activateOnEmqxWebhook(creds, customer_identity_id);
+  if (activation.ok) {
+    await admin
+      .from("device_credentials")
+      .update({ provisioning_status: "active" })
+      .eq("id", credential_id);
+  } else {
+    await admin
+      .from("device_credentials")
+      .update({
+        provisioning_status: "failed",
+        provisioning_error: activation.error.slice(0, 500),
+      })
+      .eq("id", credential_id);
+    // Do NOT rollback the DB rows — operator can retry activation via
+    // the fallback SSH command. Device is registered but MQTT-inactive.
   }
 
   revalidatePath("/dashboard");
@@ -347,6 +376,9 @@ export async function provisionDevice(formData: FormData): Promise<ProvisionResu
     customer_identity_id,
     secrets_h_content: buildSecretsHFile(creds, customer_identity_id),
     emqx_activation_command: buildEmqxActivationCommand(creds, customer_identity_id),
+    emqx_activation: activation.ok
+      ? { ok: true, user: activation.user, acl_rules: activation.acl_rules }
+      : { ok: false, error: activation.error },
   };
 }
 
