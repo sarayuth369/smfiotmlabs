@@ -12,7 +12,7 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
   async function onClick() {
     if (
       !confirm(
-        "สร้าง MQTT credential ใหม่?\n\n⚠ Device เดิมที่ใช้ password เดิมจะ disconnect ทันที\nต้อง reflash firmware หรืออัพเดต app config ด้วย password ใหม่"
+        "สร้าง MQTT credential ใหม่?\n\n⚠ ESP32 ที่ใช้ password เดิมจะถูก EMQX ปฏิเสธทันที (auth fail)\nต้อง Web USB re-flash firmware ด้วย credential ใหม่\n\nFlutter app: อัพเดต Broker settings ด้วย password ใหม่ก็พอ"
       )
     )
       return;
@@ -71,8 +71,16 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
             <CredRow label="Password" value={result.password} onCopy={copy} copied={copied} secret />
           </div>
 
-          <div className="mt-4 rounded-lg bg-white/70 border border-amber-200 p-3 text-xs text-amber-900">
-            <strong>ขั้นถัดไป — Free HiveMQ tier:</strong> ไปที่ HiveMQ Dashboard → Access Management → Create Credential ด้วย Username + Password นี้ (ค่าที่แสดง). SMF Web เก็บเฉพาะ hash ไม่รู้ค่าจริง.
+          <div className="mt-4 rounded-lg bg-white/70 border border-amber-200 p-3 text-xs text-amber-900 space-y-2">
+            <div>
+              <strong>Flutter app</strong>: MQTT Broker → Host <code className="font-mono">mqtt.bkknex.com</code> Port <code>8883</code> TLS ON, Username + Password ข้างบน → Save → เชื่อมต่อใหม่
+            </div>
+            <div>
+              <strong>ESP32</strong>: ต้อง Web USB re-flash firmware — เพราะ password ใหม่ถูก patch เข้า ProvisioningSlot ตอน flash. ไปที่หน้า &quot;เพิ่มอุปกรณ์&quot; → เลือก device เดิม (หรือ provision ใหม่) → กด &quot;🔌 ติดตั้ง Firmware&quot;.
+            </div>
+            <div className="text-amber-900/70">
+              EMQX broker activation = อัตโนมัติผ่าน webhook (mqtt.bkknex.com:8443). ไม่ต้อง SSH หรือ manual config.
+            </div>
           </div>
         </div>
       )}

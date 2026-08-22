@@ -4,20 +4,26 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  createDeviceCredential,
-  revokeDeviceCredential,
-  toCredentialMetadata,
-  type DeviceAclSpec,
-} from "@/lib/mqtt-credential";
+  generateDeviceCredentials,
+  activateOnEmqxWebhook,
+} from "@/lib/device-provision";
 
 /**
- * Regenerate MQTT credential for a device.
- * Returns plaintext password ONCE — never stored. bcrypt hash goes to
- * device_credentials. Previous active credential is revoked.
+ * Phase 6 — Regenerate MQTT credential for an existing device.
  *
- * ⚠ Free HiveMQ tier: broker credential must ALSO be updated manually in
- * HiveMQ Dashboard. This action only updates SMF-side hash record.
- * Starter tier + REST API: server can auto-create broker credential (TODO).
+ * Flow:
+ *   1. Verify caller owns the device (RLS + explicit farm check).
+ *   2. Resolve customer_identity_id from profile.
+ *   3. Generate fresh 32-char password + bcrypt hash locally.
+ *   4. Revoke any active credential row (unique-active constraint).
+ *   5. Insert new device_credentials row (hash + prefix + last4 + topic prefix).
+ *   6. Call EMQX webhook to CREATE-OR-UPDATE (idempotent) the broker user
+ *      with the new password. ACL rules stay identical to first provision.
+ *   7. Return plaintext password to caller ONCE — never persisted.
+ *
+ * After success:
+ *   - Flutter app: update Broker password only.
+ *   - ESP32: must Web-USB re-flash (password baked into firmware ProvisioningSlot).
  */
 export async function regenerateDeviceCredential(
   deviceId: string
@@ -26,8 +32,8 @@ export async function regenerateDeviceCredential(
       ok: true;
       mqtt_username: string;
       mqtt_password: string;
-      broker_registered?: boolean;
-      manual_instruction?: string;
+      broker_registered: boolean;
+      acl_rules?: number;
     }
   | { ok: false; error: string }
 > {
@@ -37,46 +43,40 @@ export async function regenerateDeviceCredential(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "unauthenticated" };
 
-  // Ownership check via RLS-scoped read (user client). Resolve customer_identity_id
-  // for ACL scoping (automatic mode only — manual mode ignores ACL param).
   const { data: device } = await supabase
     .from("iot_nodes")
-    .select(
-      "id, device_uid, farms!inner(user_id, profiles!inner(customer_identity_id))"
-    )
+    .select("id, device_uid, farm_id")
     .eq("id", deviceId)
     .maybeSingle();
   if (!device) return { ok: false, error: "device not found" };
 
-  const farmsRel = (device as unknown as {
-    farms?: { profiles?: { customer_identity_id?: string | null } }
-      | { profiles?: { customer_identity_id?: string | null } }[];
-  }).farms;
-  const farm = Array.isArray(farmsRel) ? farmsRel[0] : farmsRel;
-  const profile = Array.isArray(farm?.profiles) ? farm.profiles[0] : farm?.profiles;
-  const customerIdentityId = profile?.customer_identity_id ?? null;
+  const { data: farmCheck } = await supabase
+    .from("farms")
+    .select("id")
+    .eq("id", device.farm_id as string)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!farmCheck) return { ok: false, error: "not authorized for this device" };
 
-  const acl: DeviceAclSpec | undefined = customerIdentityId
-    ? { customer_identity_id: customerIdentityId, device_uid: device.device_uid as string }
-    : undefined;
-
-  // Delegate to broker-agnostic adapter (manual now, automatic when Starter tier set).
-  const result = await createDeviceCredential(device.device_uid as string, acl);
-  if (!result.ok) {
-    console.warn("[mqtt.regenerate] adapter failed", result.error);
-    return { ok: false, error: `broker provisioning failed: ${result.error}` };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("customer_identity_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  const customerIdentityId = (profile?.customer_identity_id as string | null) ?? null;
+  if (!customerIdentityId) {
+    return {
+      ok: false,
+      error: "profile ยังไม่มี customer_identity_id — โปรดติดต่อผู้ดูแล",
+    };
   }
-  const { credential } = result.data;
-  const meta = toCredentialMetadata(credential);
+
+  const deviceUid = device.device_uid as string;
+  const creds = await generateDeviceCredentials(deviceUid, customerIdentityId);
 
   const admin = createAdminClient();
 
-  // Revoke any existing active credential (partial unique index enforces one active per device)
-  const { data: existing } = await admin
-    .from("device_credentials")
-    .select("mqtt_username")
-    .eq("device_id", deviceId)
-    .is("revoked_at", null);
+  // Revoke any active credential row (partial unique index enforces one active per device).
   await admin
     .from("device_credentials")
     .update({
@@ -86,46 +86,42 @@ export async function regenerateDeviceCredential(
     .eq("device_id", deviceId)
     .is("revoked_at", null);
 
-  // Best-effort broker revoke of previous credential (automatic mode). Manual = no-op.
-  for (const prev of existing ?? []) {
-    if (prev.mqtt_username && prev.mqtt_username !== meta.mqtt_username) {
-      await revokeDeviceCredential(prev.mqtt_username as string).catch(() => {
-        /* non-fatal */
-      });
-    }
-  }
-
-  // Insert new credential — status reflects broker registration outcome
-  const status = result.brokerRegistered ? "active" : "active"; // manual mode = active immediately
+  // Insert new active credential (hash only — plaintext never persisted).
   const { error: insErr } = await admin.from("device_credentials").insert({
     device_id: deviceId,
-    mqtt_username: meta.mqtt_username,
-    mqtt_password_hash: meta.mqtt_password_hash,
-    mqtt_password_prefix: meta.mqtt_password_prefix,
-    mqtt_password_last4: meta.mqtt_password_last4,
-    hivemq_credential_id: result.data.brokerCredentialId ?? null,
-    provisioning_status: status,
+    mqtt_username: creds.mqtt_username,
+    mqtt_password_hash: creds.mqtt_password_hash,
+    mqtt_password_prefix: creds.mqtt_password_prefix,
+    mqtt_password_last4: creds.mqtt_password.slice(-4),
+    mqtt_topic_prefix: creds.mqtt_topic_prefix,
+    provisioning_status: "active",
     created_by: user.id,
   });
   if (insErr) {
     console.warn("[mqtt.regenerate] insert error", insErr);
-    // Safe failure: if we created a broker credential but DB write failed,
-    // rollback broker credential to avoid orphan.
-    if (result.brokerRegistered) {
-      await revokeDeviceCredential(meta.mqtt_username).catch(() => {
-        /* logged */
-      });
-    }
-    return { ok: false, error: "failed to store credential" };
+    return { ok: false, error: "failed to store new credential: " + insErr.message };
+  }
+
+  // Rotate broker password via EMQX webhook (idempotent — PUT if exists, POST if new).
+  const activation = await activateOnEmqxWebhook(creds, customerIdentityId);
+  if (!activation.ok) {
+    console.warn("[mqtt.regenerate] webhook activation failed", activation.error);
+    return {
+      ok: false,
+      error:
+        "credential เก็บใน DB แล้ว แต่ EMQX webhook ล้มเหลว: " +
+        activation.error +
+        " — ลอง refresh หน้าและ Regenerate อีกครั้ง",
+    };
   }
 
   revalidatePath(`/dashboard/devices/${deviceId}/mqtt`);
   return {
     ok: true,
-    mqtt_username: credential.mqtt_username,
-    mqtt_password: credential.mqtt_password,
-    broker_registered: result.brokerRegistered,
-    manual_instruction: result.manualInstruction,
+    mqtt_username: creds.mqtt_username,
+    mqtt_password: creds.mqtt_password,
+    broker_registered: true,
+    acl_rules: activation.acl_rules,
   };
 }
 
@@ -159,4 +155,3 @@ export async function claimDeviceByCode(formData: FormData): Promise<void> {
   if (deviceId) revalidatePath(`/dashboard/devices/${deviceId}`);
   revalidatePath("/dashboard/farms");
 }
-
