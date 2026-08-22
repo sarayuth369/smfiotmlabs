@@ -176,19 +176,66 @@ export async function patchFirmware(
   writeField(patched, begin + SLOT.mqtt_pass.offset,   SLOT.mqtt_pass.length,   values.mqtt_pass,   "mqtt_pass");
   // Markers untouched — sanity check preserved
 
-  // Phase 6.5 fix #5: SKIP hash rewrite.
-  // The rewriteEspImageHashIfPresent implementation may be incorrect for
-  // ESP-IDF app image format (padding, checksum byte). Standard Arduino/
-  // ESP-IDF bootloader does not enforce app SHA256 verification unless
-  // secure boot / rollback protection is enabled. Leaving the suffix stale
-  // is safe on this project's build.
+  // Phase 6.5 fix #6: recompute ESP-IDF XOR checksum byte + SHA256 suffix.
   //
-  // If future firmware enables CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE or
-  // secure boot, revive rewriteEspImageHashIfPresent — but use esptool-js
-  // ImageObject.datalength (not naive buf.length - 32) to compute payload.
-  const hashRewritten = false;
+  // ESP-IDF app image layout:
+  //   [header (24B)] [seg1_hdr(8) seg1_data] [seg2_hdr seg2_data] ...
+  //   [pad to 16B alignment] [checksum byte at end of padded region]
+  //   [SHA256 (32B) if header[23] == 1]
+  //
+  // The checksum byte = 0xEF XOR (all segment data bytes). Bootloader
+  // recomputes at boot; on mismatch it panics + soft-resets BEFORE the
+  // app runs. That is the true root cause of the persistent boot loop
+  // (RTC_SW_SYS_RST, Saved PC in bootloader IRAM, no Serial output).
+  //
+  // XOR is commutative: only the delta of changed bytes matters. So we
+  // XOR (original[i] ^ patched[i]) for the 249 SLOT bytes into the stored
+  // checksum byte. Then rewrite SHA256 of the entire pre-SHA region.
+  const hashRewritten = await recomputeEspChecksumAndHash(
+    patched, baseBinary, begin, SLOT_TOTAL_LEN
+  );
 
   return { bytes: patched, hashRewritten };
+}
+
+/**
+ * After a byte-region patch, restore ESP-IDF image invariants:
+ *  1. XOR checksum byte (always present)
+ *  2. Appended SHA256 (only if header.hash_appended == 1)
+ *
+ * Returns true if hash suffix was rewritten, false otherwise. Throws
+ * only on obviously malformed input; a non-ESP image is a no-op.
+ */
+async function recomputeEspChecksumAndHash(
+  patched: Uint8Array,
+  original: Uint8Array,
+  patchStart: number,
+  patchLen: number
+): Promise<boolean> {
+  if (patched.length < 24 + ESP_IMAGE_HASH_LEN) return false;
+  if (patched[0] !== ESP_IMAGE_MAGIC) return false;
+
+  const hashAppended = patched[ESP_IMAGE_HASH_APPENDED_OFFSET] === 1;
+  const checksumOffset = hashAppended
+    ? patched.length - ESP_IMAGE_HASH_LEN - 1
+    : patched.length - 1;
+
+  // XOR delta of changed bytes → apply to stored checksum byte.
+  let delta = 0;
+  for (let i = 0; i < patchLen; i++) {
+    delta ^= original[patchStart + i] ^ patched[patchStart + i];
+  }
+  patched[checksumOffset] ^= delta;
+
+  if (!hashAppended) return false;
+
+  // Rewrite SHA256 of the pre-SHA region (which now includes fixed checksum).
+  const payloadLen = patched.length - ESP_IMAGE_HASH_LEN;
+  const payloadCopy = new ArrayBuffer(payloadLen);
+  new Uint8Array(payloadCopy).set(patched.subarray(0, payloadLen));
+  const digest = await crypto.subtle.digest("SHA-256", payloadCopy);
+  patched.set(new Uint8Array(digest), payloadLen);
+  return true;
 }
 
 /** SHA-256 hex of bytes (Web Crypto API, works in Node 18+ / edge / browser). */
