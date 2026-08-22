@@ -13,6 +13,7 @@ import {
   activateOnEmqxWebhook,
   type ProvisionedCredentials,
 } from "@/lib/device-provision";
+import { patchFirmware, sha256Hex } from "@/lib/firmware-patcher";
 
 const DEVICE_UID_RE = /^[A-Z0-9][A-Z0-9\-_]{2,63}$/i;
 
@@ -215,6 +216,23 @@ export async function restoreDevice(deviceId: string): Promise<void> {
  * ROLLBACK on failure: if step 6 fails, deletes iot_nodes row inserted
  * in step 5 (cascade cleans nothing else since credential not yet stored).
  */
+export type FirmwareArtifactB64 = {
+  role: "bootloader" | "partitions" | "app";
+  offset: number;
+  bytes_b64: string;
+  size: number;
+  sha256: string;
+};
+
+export type ProvisionFirmwareBundle =
+  | {
+      available: true;
+      release_id: string;
+      release_version: string;
+      artifacts: FirmwareArtifactB64[];
+    }
+  | { available: false; reason: string };
+
 export type ProvisionResult =
   | {
       ok: true;
@@ -229,8 +247,99 @@ export type ProvisionResult =
       emqx_activation:
         | { ok: true; user: string; acl_rules: number }
         | { ok: false; error: string };
+      firmware: ProvisionFirmwareBundle;
     }
   | { ok: false; error: string };
+
+/**
+ * Phase 6.2 — fetch latest approved base firmware for a hardware model,
+ * download 3 artifacts from Supabase Storage, patch the app binary with
+ * per-device provisioning values, return base64-encoded artifacts.
+ * Returns { available:false } when no base firmware release exists —
+ * caller shows admin-upload hint instead of failing hard.
+ */
+async function buildProvisionFirmwareBundle(
+  admin: ReturnType<typeof createAdminClient>,
+  creds: ProvisionedCredentials,
+  customer_identity_id: string,
+  hardware_model: string
+): Promise<ProvisionFirmwareBundle> {
+  const { data: releases } = await admin
+    .from("firmware_releases")
+    .select(
+      "id, version, board, hardware_model, release_channel, is_latest, approved_at, app_path, app_offset, sha256_app, bootloader_path, bootloader_offset, sha256_bootloader, partitions_path, partitions_offset, sha256_partitions"
+    )
+    .in("hardware_model", [hardware_model, "ESP32-S3"])
+    .in("release_channel", ["stable", "test"])
+    .not("approved_at", "is", null)
+    .order("is_latest", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const rel = (releases ?? [])[0];
+  if (!rel) {
+    return { available: false, reason: "no approved base firmware — admin must upload via /admin/firmware first" };
+  }
+  if (!rel.app_path) {
+    return { available: false, reason: "release " + rel.version + " missing app_path" };
+  }
+
+  const bucket = "firmware";
+  async function fetchArtifact(path: string): Promise<Uint8Array> {
+    const { data, error } = await admin.storage.from(bucket).download(path);
+    if (error || !data) throw new Error("download " + path + " failed: " + (error?.message ?? "unknown"));
+    return new Uint8Array(await data.arrayBuffer());
+  }
+
+  try {
+    const appBytes = await fetchArtifact(rel.app_path as string);
+    const patched = patchFirmware(appBytes, {
+      mqtt_host: "mqtt.bkknex.com",
+      customer_id: customer_identity_id,
+      device_uid: creds.device_uid,
+      mqtt_user: creds.mqtt_username,
+      mqtt_pass: creds.mqtt_password,
+    });
+    const appSha = await sha256Hex(patched);
+
+    const artifacts: FirmwareArtifactB64[] = [];
+    if (rel.bootloader_path) {
+      const b = await fetchArtifact(rel.bootloader_path as string);
+      artifacts.push({
+        role: "bootloader",
+        offset: (rel.bootloader_offset as number) ?? 0x0,
+        bytes_b64: Buffer.from(b).toString("base64"),
+        size: b.byteLength,
+        sha256: await sha256Hex(b),
+      });
+    }
+    if (rel.partitions_path) {
+      const b = await fetchArtifact(rel.partitions_path as string);
+      artifacts.push({
+        role: "partitions",
+        offset: (rel.partitions_offset as number) ?? 0x8000,
+        bytes_b64: Buffer.from(b).toString("base64"),
+        size: b.byteLength,
+        sha256: await sha256Hex(b),
+      });
+    }
+    artifacts.push({
+      role: "app",
+      offset: (rel.app_offset as number) ?? 0x10000,
+      bytes_b64: Buffer.from(patched).toString("base64"),
+      size: patched.byteLength,
+      sha256: appSha,
+    });
+
+    return {
+      available: true,
+      release_id: rel.id as string,
+      release_version: rel.version as string,
+      artifacts,
+    };
+  } catch (e) {
+    return { available: false, reason: "patch failed: " + (e as Error).message };
+  }
+}
 
 export async function provisionDevice(formData: FormData): Promise<ProvisionResult> {
   const supabase = await createClient();
@@ -362,6 +471,16 @@ export async function provisionDevice(formData: FormData): Promise<ProvisionResu
     // the fallback SSH command. Device is registered but MQTT-inactive.
   }
 
+  // Step 8: build per-device firmware bundle (patched from base release).
+  // Non-fatal: if base firmware unavailable, still return provisioned device
+  // and let UI hint at admin action.
+  const firmware = await buildProvisionFirmwareBundle(
+    admin,
+    creds,
+    customer_identity_id,
+    "SMF-MAIN-V1"
+  );
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/devices");
   revalidatePath(`/dashboard/farms/${farm_id}`);
@@ -379,6 +498,50 @@ export async function provisionDevice(formData: FormData): Promise<ProvisionResu
     emqx_activation: activation.ok
       ? { ok: true, user: activation.user, acl_rules: activation.acl_rules }
       : { ok: false, error: activation.error },
+    firmware,
+  };
+}
+
+/**
+ * Phase 6.5 helper — poll from install UI to know when device is ONLINE.
+ * Returns fresh `last_seen` + a simple online flag based on 60s threshold.
+ */
+export async function checkDeviceOnline(deviceId: string): Promise<{
+  ok: boolean;
+  online: boolean;
+  last_seen: string | null;
+  status: string | null;
+  firmware_version: string | null;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, online: false, last_seen: null, status: null, firmware_version: null };
+
+  const { data } = await supabase
+    .from("iot_nodes")
+    .select("last_seen, status, firmware_version, farm_id")
+    .eq("id", deviceId)
+    .maybeSingle();
+  if (!data) return { ok: false, online: false, last_seen: null, status: null, firmware_version: null };
+
+  const { data: farm } = await supabase
+    .from("farms")
+    .select("id")
+    .eq("id", (data as { farm_id: string }).farm_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!farm) return { ok: false, online: false, last_seen: null, status: null, firmware_version: null };
+
+  const lastSeen = (data as { last_seen: string | null }).last_seen;
+  const online = lastSeen ? Date.now() - new Date(lastSeen).getTime() < 60_000 : false;
+  return {
+    ok: true,
+    online,
+    last_seen: lastSeen,
+    status: (data as { status: string | null }).status,
+    firmware_version: (data as { firmware_version: string | null }).firmware_version,
   };
 }
 
