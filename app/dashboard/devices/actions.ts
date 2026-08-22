@@ -154,11 +154,22 @@ export async function archiveDevice(deviceId: string): Promise<void> {
   if (!current) throw new Error("ไม่พบอุปกรณ์");
   await requireOwnedFarm(supabase, user.id, current.farm_id);
 
+  const archivedAt = new Date().toISOString();
   const { error } = await supabase
     .from("iot_nodes")
-    .update({ archived_at: new Date().toISOString() })
+    .update({ archived_at: archivedAt })
     .eq("id", deviceId);
   if (error) throw new Error(error.message);
+
+  // Cascade: archive all active sensors on this device so they stop
+  // counting against the sensor quota. Uses the same timestamp as the
+  // parent so restoreDevice can pair them back up.
+  const { error: sensorErr } = await supabase
+    .from("sensors")
+    .update({ archived_at: archivedAt })
+    .eq("device_id", deviceId)
+    .is("archived_at", null);
+  if (sensorErr) throw new Error("cascade archive sensors failed: " + sensorErr.message);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/devices");

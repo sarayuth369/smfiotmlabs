@@ -253,7 +253,9 @@ export async function canCreateNode(
   return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
 }
 
-/** Counts ACTIVE sensors across ALL devices in ALL farms of a user. */
+/** Counts ACTIVE sensors across ALL ACTIVE devices in ALL farms of a user.
+ *  Excludes sensors whose parent device is archived (defense in depth —
+ *  archiveDevice cascades, but old data may still have orphans). */
 export async function getSensorUsage(
   supabase: SupabaseClient,
   userId: string
@@ -267,7 +269,8 @@ export async function getSensorUsage(
   const { data: nodeIdsRow } = await supabase
     .from("iot_nodes")
     .select("id")
-    .in("farm_id", farmIds);
+    .in("farm_id", farmIds)
+    .is("archived_at", null);
   const nodeIds = (nodeIdsRow ?? []).map((n) => n.id as string);
   if (nodeIds.length === 0) return 0;
   const { count } = await supabase
