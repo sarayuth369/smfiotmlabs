@@ -51,6 +51,13 @@ const SLOT_TOTAL_LEN = 249;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DEVICE_UID_RE = /^SMF-[A-F0-9]{6,20}$/;
 
+// ESP-IDF app image header:
+//   byte 0  = magic (0xE9)
+//   byte 23 = hash_appended flag (1 = SHA256 of file[0..len-32] stored in last 32 bytes)
+const ESP_IMAGE_MAGIC = 0xe9;
+const ESP_IMAGE_HASH_APPENDED_OFFSET = 23;
+const ESP_IMAGE_HASH_LEN = 32;
+
 export type ProvisioningValues = {
   mqtt_host: string;
   customer_id: string;
@@ -100,14 +107,39 @@ function writeField(
 }
 
 /**
+ * Recompute ESP-IDF app image SHA256 suffix if hash_appended=1.
+ * ESP-IDF bootloader verifies this SHA256 at boot; patching bytes in the
+ * middle of the image (ProvisioningSlot) makes it invalid, causing an
+ * immediate soft reset (RTC_SW_SYS_RST) before Serial.begin runs.
+ *
+ * If header.magic != 0xE9 or hash_appended != 1 -> no-op (returns false).
+ * Otherwise recomputes SHA256 of bytes[0..len-32] and overwrites the
+ * final 32 bytes in place (mutates the passed buffer).
+ */
+async function rewriteEspImageHashIfPresent(buf: Uint8Array): Promise<boolean> {
+  if (buf.length < 24 + ESP_IMAGE_HASH_LEN) return false;
+  if (buf[0] !== ESP_IMAGE_MAGIC) return false;
+  if (buf[ESP_IMAGE_HASH_APPENDED_OFFSET] !== 1) return false;
+
+  const payloadLen = buf.length - ESP_IMAGE_HASH_LEN;
+  const payloadCopy = new ArrayBuffer(payloadLen);
+  new Uint8Array(payloadCopy).set(buf.subarray(0, payloadLen));
+  const digest = await crypto.subtle.digest("SHA-256", payloadCopy);
+  buf.set(new Uint8Array(digest), payloadLen);
+  return true;
+}
+
+/**
  * Patch a base firmware.bin with per-device provisioning values.
  * Returns a fresh Uint8Array — original input unchanged.
+ * Also rewrites the ESP-IDF SHA256 image suffix so the bootloader
+ * hash check passes (skipped if header magic != 0xE9 or hash not appended).
  * Throws on any marker/format/length error.
  */
-export function patchFirmware(
+export async function patchFirmware(
   baseBinary: Uint8Array,
   values: ProvisioningValues
-): Uint8Array {
+): Promise<{ bytes: Uint8Array; hashRewritten: boolean }> {
   if (!UUID_RE.test(values.customer_id)) {
     throw new Error(`firmware-patcher: customer_id "${values.customer_id}" is not a valid UUID`);
   }
@@ -144,7 +176,9 @@ export function patchFirmware(
   writeField(patched, begin + SLOT.mqtt_pass.offset,   SLOT.mqtt_pass.length,   values.mqtt_pass,   "mqtt_pass");
   // Markers untouched — sanity check preserved
 
-  return patched;
+  const hashRewritten = await rewriteEspImageHashIfPresent(patched);
+
+  return { bytes: patched, hashRewritten };
 }
 
 /** SHA-256 hex of bytes (Web Crypto API, works in Node 18+ / edge / browser). */

@@ -292,13 +292,19 @@ async function buildProvisionFirmwareBundle(
 
   try {
     const appBytes = await fetchArtifact(rel.app_path as string);
-    const patched = patchFirmware(appBytes, {
+    const { bytes: patched, hashRewritten } = await patchFirmware(appBytes, {
       mqtt_host: "mqtt.bkknex.com",
       customer_id: customer_identity_id,
       device_uid: creds.device_uid,
       mqtt_user: creds.mqtt_username,
       mqtt_pass: creds.mqtt_password,
     });
+    if (!hashRewritten) {
+      console.warn(
+        `[provision] ${creds.device_uid}: app.bin ESP-IDF hash NOT rewritten ` +
+          `(header.magic != 0xE9 or hash_appended != 1) — device may boot-loop if bootloader verifies hash`
+      );
+    }
     const appSha = await sha256Hex(patched);
 
     const artifacts: FirmwareArtifactB64[] = [];
