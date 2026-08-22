@@ -5,12 +5,10 @@ import { formatThaiDate } from "@/lib/payment";
 import { CopyRow } from "./_components/CopyRow";
 import { RegenerateButton } from "./_components/RegenerateButton";
 
-// Broker config — env-driven so migration HiveMQ → self-hosted EMQX = 1 env change, no code change
-const HIVEMQ_HOST =
-  process.env.NEXT_PUBLIC_MQTT_BROKER_HOST ??
-  "c3a0a4b369d142129741b4e3178a06f7.s1.eu.hivemq.cloud";
-const HIVEMQ_PORT_TLS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_TLS_PORT ?? "8883", 10);
-const HIVEMQ_PORT_WS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_WS_PORT ?? "8084", 10);
+// Phase 6 broker — mqtt.bkknex.com self-hosted EMQX. Env override for staging.
+const BROKER_HOST = process.env.NEXT_PUBLIC_MQTT_BROKER_HOST ?? "mqtt.bkknex.com";
+const BROKER_PORT_TLS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_TLS_PORT ?? "8883", 10);
+const BROKER_PORT_WS = parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_WS_PORT ?? "8084", 10);
 
 export default async function DeviceMqttPage({
   params,
@@ -23,15 +21,13 @@ export default async function DeviceMqttPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // RLS enforces ownership
   const { data: device } = await supabase
     .from("iot_nodes")
-    .select("id, device_uid, device_name, mqtt_client_id, farm_id")
+    .select("id, device_uid, device_name, farm_id, customer_identity_id")
     .eq("id", deviceId)
     .maybeSingle();
   if (!device) notFound();
 
-  // Extra ownership check
   const { data: farmCheck } = await supabase
     .from("farms")
     .select("id")
@@ -40,21 +36,17 @@ export default async function DeviceMqttPage({
     .maybeSingle();
   if (!farmCheck) notFound();
 
-  // Read credential metadata (never returns hash)
   const { data: cred } = await supabase
     .from("device_credentials")
-    .select("mqtt_username, mqtt_password_prefix, mqtt_password_last4, created_at, rotated_at")
+    .select("mqtt_username, mqtt_password_prefix, mqtt_password_last4, created_at, rotated_at, mqtt_topic_prefix")
     .eq("device_id", deviceId)
     .is("revoked_at", null)
     .maybeSingle();
 
-  // Legacy topic prefix (if mapping exists)
-  const { data: legacy } = await supabase
-    .from("legacy_device_mappings")
-    .select("legacy_topic_prefix")
-    .eq("device_id", deviceId)
-    .maybeSingle();
-  const topicPrefix = (legacy?.legacy_topic_prefix as string | undefined) ?? "farm";
+  const customerUuid = (device.customer_identity_id as string | null) ?? "<customer-uuid-missing>";
+  const deviceUid = device.device_uid as string;
+  const topicPrefix = (cred?.mqtt_topic_prefix as string | undefined)
+    ?? `smf/${customerUuid}/${deviceUid}`;
 
   return (
     <div>
@@ -67,7 +59,7 @@ export default async function DeviceMqttPage({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-brand-800">MQTT Configuration</h1>
         <p className="text-sm text-brand-900/60 mt-1">
-          ข้อมูลเชื่อมต่อ MQTT สำหรับ ESP32 / Flutter App — <span className="font-mono">{device.device_uid}</span>
+          ข้อมูลเชื่อมต่อ MQTT (Phase 6 multi-tenant) — <span className="font-mono">{deviceUid}</span>
         </p>
       </div>
 
@@ -75,13 +67,16 @@ export default async function DeviceMqttPage({
         <div className="lg:col-span-2 space-y-5">
           <div className="card p-6 space-y-4">
             <h2 className="font-bold text-brand-800">Broker Connection</h2>
-            <CopyRow label="Broker Host" value={HIVEMQ_HOST} />
+            <CopyRow label="Broker Host" value={BROKER_HOST} />
             <div className="grid sm:grid-cols-2 gap-4">
-              <CopyRow label="TLS Port (MQTT)" value={String(HIVEMQ_PORT_TLS)} />
-              <CopyRow label="WebSocket Port" value={String(HIVEMQ_PORT_WS)} />
+              <CopyRow label="TLS Port (MQTT)" value={String(BROKER_PORT_TLS)} />
+              <CopyRow label="WebSocket Port" value={String(BROKER_PORT_WS)} />
             </div>
-            <CopyRow label="Full URL (mqtt.js / PubSubClient)" value={`mqtts://${HIVEMQ_HOST}:${HIVEMQ_PORT_TLS}`} />
-            <CopyRow label="Client ID" value={(device.mqtt_client_id as string) ?? `smf_device_${device.device_uid}`} />
+            <CopyRow label="Full URL (mqtt.js / PubSubClient)" value={`mqtts://${BROKER_HOST}:${BROKER_PORT_TLS}`} />
+            <CopyRow label="Client ID" value={deviceUid} />
+            <p className="text-xs text-brand-900/55 border-t border-border pt-3">
+              TLS ใช้ Let&apos;s Encrypt ISRG Root X1. Client ID = device_uid (ฝัง firmware ที่ ProvisioningSlot ตอน Web USB flash).
+            </p>
           </div>
 
           <div className="card p-6 space-y-4">
@@ -97,7 +92,7 @@ export default async function DeviceMqttPage({
                     {(cred.mqtt_password_last4 as string) ?? ""}
                   </div>
                   <p className="mt-1 text-xs text-brand-900/50">
-                    เก็บเฉพาะ hash — plaintext ดูไม่ได้อีก. หากลืม password ต้อง Regenerate ใหม่
+                    เก็บเฉพาะ bcrypt hash — plaintext ดูไม่ได้อีก. หากลืม password ต้อง Regenerate ใหม่ + re-flash firmware
                   </p>
                 </div>
                 <div className="text-xs text-brand-900/55 border-t border-border pt-3">
@@ -120,17 +115,32 @@ export default async function DeviceMqttPage({
           <div className="card p-6 space-y-4">
             <h2 className="font-bold text-brand-800">MQTT Topics</h2>
             <p className="text-xs text-brand-900/60">
-              Topic ที่ device นี้ publish/subscribe ผ่าน broker
+              Topic ที่ device นี้ publish/subscribe ผ่าน broker (multi-tenant scope: <code className="font-mono">smf/{`{customer_uuid}`}/{`{device_uid}`}/*</code>)
             </p>
-            <div className="space-y-2">
-              <CopyRow label="Telemetry (publish)" value={`${topicPrefix}/temp`} />
-              <CopyRow label="Humidity (publish)" value={`${topicPrefix}/humidity`} />
-              <CopyRow label="Status (publish)" value={`${topicPrefix}/device/status`} />
-              <CopyRow label="Relay set (subscribe)" value={`${topicPrefix}/relay/+/set`} />
-              <CopyRow label="Relay status (publish)" value={`${topicPrefix}/relay/+/status`} />
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-bold text-brand-900/60 uppercase tracking-wider mb-2">Publish (device → cloud)</div>
+                <div className="space-y-2">
+                  <CopyRow label="Telemetry" value={`${topicPrefix}/telemetry`} />
+                  <CopyRow label="Status" value={`${topicPrefix}/status`} />
+                  <CopyRow label="Command response" value={`${topicPrefix}/response`} />
+                  <CopyRow label="Event (generic)" value={`${topicPrefix}/event/+`} />
+                  <CopyRow label="Relay event" value={`${topicPrefix}/event/relay/+`} />
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold text-brand-900/60 uppercase tracking-wider mb-2">Subscribe (cloud → device)</div>
+                <div className="space-y-2">
+                  <CopyRow label="WiFi reset" value={`${topicPrefix}/cmd/wifi_reset`} />
+                  <CopyRow label="Restart" value={`${topicPrefix}/cmd/restart`} />
+                  <CopyRow label="Relay control" value={`${topicPrefix}/cmd/relay/+`} />
+                  <CopyRow label="Schedule config" value={`${topicPrefix}/config/schedule`} />
+                  <CopyRow label="Rules config" value={`${topicPrefix}/config/rules`} />
+                </div>
+              </div>
             </div>
             <p className="text-xs text-brand-900/55 border-t border-border pt-3">
-              Legacy prefix: <code className="font-mono">{topicPrefix}</code>. Multi-device production ต้องเปลี่ยน firmware ให้ใส่ device-scoped prefix — <Link href="/docs/esp32-mqtt-integration-spec.md" className="underline">ดู spec</Link>
+              EMQX ACL บังคับ scope: device นี้ publish/subscribe ได้เฉพาะ topics ใต้ <code className="font-mono">{topicPrefix}/*</code>. ข้าม tenant / ข้าม device = deny.
             </p>
           </div>
         </div>
@@ -138,28 +148,26 @@ export default async function DeviceMqttPage({
         <aside className="space-y-4">
           <div className="card p-5">
             <div className="text-xs text-brand-900/55 mb-2">Device</div>
-            <div className="font-mono text-sm text-brand-800 break-all">{device.device_uid}</div>
+            <div className="font-mono text-sm text-brand-800 break-all">{deviceUid}</div>
             <div className="mt-2 text-sm text-brand-900/70">{device.device_name}</div>
           </div>
 
           <div className="card p-5">
-            <div className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2">
-              ⚠ Free HiveMQ Tier
+            <div className="text-xs font-bold text-green-800 uppercase tracking-wider mb-2">
+              ✓ Phase 6 Production Broker
             </div>
             <p className="text-xs text-brand-900/70">
-              ต้องสร้าง credential ที่ HiveMQ Dashboard ด้วยตัวเอง (ด้วย username/password ที่แสดงหลัง Regenerate). Broker ไม่รู้จัก username นี้จนกว่าจะเพิ่มที่ Dashboard.
-            </p>
-            <p className="mt-2 text-xs text-brand-900/70">
-              Upgrade Starter tier ($65/mo) = automated provisioning + per-device ACL
+              Self-hosted EMQX ที่ <code className="font-mono">mqtt.bkknex.com</code>. Provisioning + ACL auto ตอน &quot;เพิ่มอุปกรณ์&quot; ผ่าน webhook (Vercel → VPS:8443). ไม่ต้อง manual config.
             </p>
           </div>
 
           <div className="card p-5">
             <div className="text-xs font-bold text-brand-900/60 uppercase tracking-wider mb-2">
-              📱 Flutter App
+              📱 Flutter App / ESP32
             </div>
             <p className="text-xs text-brand-900/70">
-              เปิด Flutter App → Settings → Broker → กรอกค่า Broker Host + Port + Username + Password จากด้านซ้าย → Save → Connect
+              <strong>ESP32</strong>: credentials ถูก patch เข้า firmware อัตโนมัติตอน Web USB flash — ไม่ต้อง config manual<br />
+              <strong>Flutter App</strong>: Broker Host + TLS Port + Username + Password (จากด้านซ้าย) → Save → Connect
             </p>
           </div>
         </aside>
