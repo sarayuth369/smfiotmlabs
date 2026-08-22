@@ -154,14 +154,19 @@ export function ProvisionInstallFlasher({ deviceId, deviceUid, releaseVersion, a
       const initProgress = files.map((f) => ({ role: f.role, written: 0, total: f.data.length }));
       setProgress(initProgress);
 
+      // esptool-js "keep" is unreliable — writes 0 (invalid) into image header
+      // bytes 2-3. Use explicit values matching ESP32-S3 N16R8 (16MB flash,
+      // DIO mode, 80MHz) so the boot ROM parses spi_size + speed correctly.
+      // Mismatch causes RTC_WDT_SYS_RST during startup (Saved PC in IRAM,
+      // no Serial output — same failure mode as SHA hash mismatch).
       await loader.writeFlash({
         fileArray: files.map((f) => ({ data: f.data, address: f.address })) as unknown as {
           data: Uint8Array;
           address: number;
         }[],
-        flashMode: "keep",
-        flashFreq: "keep",
-        flashSize: "keep",
+        flashMode: "dio",
+        flashFreq: "80m",
+        flashSize: "16MB",
         eraseAll: false,
         compress: true,
         reportProgress: (fileIndex: number, written: number, total: number) => {
