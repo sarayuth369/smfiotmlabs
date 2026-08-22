@@ -23,7 +23,7 @@ export default async function DeviceMqttPage({
 
   const { data: device } = await supabase
     .from("iot_nodes")
-    .select("id, device_uid, device_name, farm_id, customer_identity_id")
+    .select("id, device_uid, device_name, farm_id")
     .eq("id", deviceId)
     .maybeSingle();
   if (!device) notFound();
@@ -43,8 +43,17 @@ export default async function DeviceMqttPage({
     .is("revoked_at", null)
     .maybeSingle();
 
-  const customerUuid = (device.customer_identity_id as string | null) ?? "<customer-uuid-missing>";
+  // customer_identity_id lives on profiles, not iot_nodes. Only needed as a
+  // fallback when device_credentials.mqtt_topic_prefix is missing (legacy
+  // rows before Phase 6.2 provisioning).
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("customer_identity_id")
+    .eq("id", user!.id)
+    .maybeSingle();
+
   const deviceUid = device.device_uid as string;
+  const customerUuid = (profile?.customer_identity_id as string | null) ?? "<customer-uuid-missing>";
   const topicPrefix = (cred?.mqtt_topic_prefix as string | undefined)
     ?? `smf/${customerUuid}/${deviceUid}`;
 
