@@ -154,25 +154,28 @@ export function ProvisionInstallFlasher({ deviceId, deviceUid, releaseVersion, a
       const initProgress = files.map((f) => ({ role: f.role, written: 0, total: f.data.length }));
       setProgress(initProgress);
 
-      // esptool-js "keep" is unreliable — writes 0 (invalid) into image header
-      // bytes 2-3. Use explicit values matching ESP32-S3 N16R8 (16MB flash,
-      // DIO mode, 80MHz) so the boot ROM parses spi_size + speed correctly.
+      // CRITICAL: use "keep" for all flash params. esptool-js has a bug when
+      // rewriting the bootloader SHA suffix after modifying header bytes 2-3
+      // (esploader.js line 1288 hashes imageDataAfterSha instead of
+      // imageDataBeforeSha — writes garbage SHA). "keep" makes esptool-js
+      // return early ("Not changing the image", line 1224) so the compiled
+      // bootloader.bin flash mode + hash stay byte-exact.
       //
-      // compress: false — deflate corruption observed on ESP32-S3 rev v0.2:
-      // stub decompression flipped bytes, causing "SHA-256 comparison failed"
-      // (calculated hash != expected hash appended to image) then app crash
-      // during startup at PC in IRAM. Uncompressed write is ~2x slower but
-      // byte-exact.
+      // The app.bin ProvisioningSlot patch + SHA suffix rewrite happens
+      // server-side in lib/firmware-patcher.ts (correct hash algorithm).
+      //
+      // compress: true is safe — the previous "SHA-256 comparison failed"
+      // was caused by the flash-params bug above, not compression.
       await loader.writeFlash({
         fileArray: files.map((f) => ({ data: f.data, address: f.address })) as unknown as {
           data: Uint8Array;
           address: number;
         }[],
-        flashMode: "dio",
-        flashFreq: "80m",
-        flashSize: "16MB",
+        flashMode: "keep",
+        flashFreq: "keep",
+        flashSize: "keep",
         eraseAll: false,
-        compress: false,
+        compress: true,
         reportProgress: (fileIndex: number, written: number, total: number) => {
           setProgress((prev) => {
             const next = [...prev];
