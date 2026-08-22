@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+
+// revalidatePath is used ONLY by claimDeviceByCode below —
+// regenerateDeviceCredential intentionally does NOT revalidate to keep the
+// one-time-password modal alive.
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   generateDeviceCredentials,
@@ -129,7 +133,10 @@ export async function regenerateDeviceCredential(
     };
   }
 
-  revalidatePath(`/dashboard/devices/${deviceId}/mqtt`);
+  // Deliberately DO NOT revalidatePath here — revalidate re-renders the
+  // page and unmounts the RegenerateButton modal that is holding the
+  // ONE-TIME plaintext password. User must be able to copy it before it
+  // vanishes. The Credential card auto-refreshes on next navigation.
   return {
     ok: true,
     mqtt_username: creds.mqtt_username,
