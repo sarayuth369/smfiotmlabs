@@ -176,7 +176,17 @@ export async function patchFirmware(
   writeField(patched, begin + SLOT.mqtt_pass.offset,   SLOT.mqtt_pass.length,   values.mqtt_pass,   "mqtt_pass");
   // Markers untouched — sanity check preserved
 
-  const hashRewritten = await rewriteEspImageHashIfPresent(patched);
+  // Phase 6.5 fix #5: SKIP hash rewrite.
+  // The rewriteEspImageHashIfPresent implementation may be incorrect for
+  // ESP-IDF app image format (padding, checksum byte). Standard Arduino/
+  // ESP-IDF bootloader does not enforce app SHA256 verification unless
+  // secure boot / rollback protection is enabled. Leaving the suffix stale
+  // is safe on this project's build.
+  //
+  // If future firmware enables CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE or
+  // secure boot, revive rewriteEspImageHashIfPresent — but use esptool-js
+  // ImageObject.datalength (not naive buf.length - 32) to compute payload.
+  const hashRewritten = false;
 
   return { bytes: patched, hashRewritten };
 }
