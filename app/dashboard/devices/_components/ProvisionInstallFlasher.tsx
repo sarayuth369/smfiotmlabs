@@ -157,8 +157,12 @@ export function ProvisionInstallFlasher({ deviceId, deviceUid, releaseVersion, a
       // esptool-js "keep" is unreliable — writes 0 (invalid) into image header
       // bytes 2-3. Use explicit values matching ESP32-S3 N16R8 (16MB flash,
       // DIO mode, 80MHz) so the boot ROM parses spi_size + speed correctly.
-      // Mismatch causes RTC_WDT_SYS_RST during startup (Saved PC in IRAM,
-      // no Serial output — same failure mode as SHA hash mismatch).
+      //
+      // compress: false — deflate corruption observed on ESP32-S3 rev v0.2:
+      // stub decompression flipped bytes, causing "SHA-256 comparison failed"
+      // (calculated hash != expected hash appended to image) then app crash
+      // during startup at PC in IRAM. Uncompressed write is ~2x slower but
+      // byte-exact.
       await loader.writeFlash({
         fileArray: files.map((f) => ({ data: f.data, address: f.address })) as unknown as {
           data: Uint8Array;
@@ -168,7 +172,7 @@ export function ProvisionInstallFlasher({ deviceId, deviceUid, releaseVersion, a
         flashFreq: "80m",
         flashSize: "16MB",
         eraseAll: false,
-        compress: true,
+        compress: false,
         reportProgress: (fileIndex: number, written: number, total: number) => {
           setProgress((prev) => {
             const next = [...prev];
