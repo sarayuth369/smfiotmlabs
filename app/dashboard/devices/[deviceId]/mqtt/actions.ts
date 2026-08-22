@@ -76,30 +76,44 @@ export async function regenerateDeviceCredential(
 
   const admin = createAdminClient();
 
-  // Revoke any active credential row (partial unique index enforces one active per device).
-  await admin
+  // mqtt_username has a UNIQUE constraint (== device_uid, never changes).
+  // Rotate the password IN PLACE on the existing row instead of insert-new.
+  // Try UPDATE first; if no row matched, INSERT a fresh one (first-ever rotation).
+  const nowIso = new Date().toISOString();
+  const { data: updated, error: updErr } = await admin
     .from("device_credentials")
     .update({
-      revoked_at: new Date().toISOString(),
-      provisioning_status: "revoked",
+      mqtt_password_hash: creds.mqtt_password_hash,
+      mqtt_password_prefix: creds.mqtt_password_prefix,
+      mqtt_password_last4: creds.mqtt_password.slice(-4),
+      mqtt_topic_prefix: creds.mqtt_topic_prefix,
+      provisioning_status: "active",
+      revoked_at: null,
+      rotated_at: nowIso,
     })
     .eq("device_id", deviceId)
-    .is("revoked_at", null);
+    .select("id");
 
-  // Insert new active credential (hash only — plaintext never persisted).
-  const { error: insErr } = await admin.from("device_credentials").insert({
-    device_id: deviceId,
-    mqtt_username: creds.mqtt_username,
-    mqtt_password_hash: creds.mqtt_password_hash,
-    mqtt_password_prefix: creds.mqtt_password_prefix,
-    mqtt_password_last4: creds.mqtt_password.slice(-4),
-    mqtt_topic_prefix: creds.mqtt_topic_prefix,
-    provisioning_status: "active",
-    created_by: user.id,
-  });
-  if (insErr) {
-    console.warn("[mqtt.regenerate] insert error", insErr);
-    return { ok: false, error: "failed to store new credential: " + insErr.message };
+  if (updErr) {
+    console.warn("[mqtt.regenerate] update error", updErr);
+    return { ok: false, error: "failed to rotate credential: " + updErr.message };
+  }
+
+  if (!updated || updated.length === 0) {
+    const { error: insErr } = await admin.from("device_credentials").insert({
+      device_id: deviceId,
+      mqtt_username: creds.mqtt_username,
+      mqtt_password_hash: creds.mqtt_password_hash,
+      mqtt_password_prefix: creds.mqtt_password_prefix,
+      mqtt_password_last4: creds.mqtt_password.slice(-4),
+      mqtt_topic_prefix: creds.mqtt_topic_prefix,
+      provisioning_status: "active",
+      created_by: user.id,
+    });
+    if (insErr) {
+      console.warn("[mqtt.regenerate] insert error", insErr);
+      return { ok: false, error: "failed to store new credential: " + insErr.message };
+    }
   }
 
   // Rotate broker password via EMQX webhook (idempotent — PUT if exists, POST if new).
