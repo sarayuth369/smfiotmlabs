@@ -1,6 +1,6 @@
 "use client";
 
-import { archiveFarm, restoreFarm } from "../actions";
+import { archiveFarm, restoreFarm, deleteFarm } from "../actions";
 
 export function ArchiveFarmButton({
   farmId,
@@ -69,6 +69,39 @@ export function RestoreFarmButton({
           <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
         </svg>
         กู้คืน
+      </button>
+    </form>
+  );
+}
+
+export function DeleteFarmButton({
+  farmId,
+  farmName,
+}: {
+  farmId: string;
+  farmName: string;
+}) {
+  return (
+    <form
+      action={deleteFarm.bind(null, farmId)}
+      onSubmit={(e) => {
+        if (
+          !confirm(
+            `ลบฟาร์ม "${farmName}" ออกจากระบบถาวร?\n\n⚠ ลบข้อมูลทั้งหมด (zones, devices, sensors, ประวัติ) ทันที\nไม่สามารถกู้คืนได้อีก — ต่างจาก "เก็บถาวร"`
+          )
+        ) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-full border border-red-200 hover:bg-red-50 text-red-700 text-xs font-semibold px-3 py-2 transition"
+      >
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        </svg>
+        ลบถาวร
       </button>
     </form>
   );

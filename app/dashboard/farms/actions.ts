@@ -157,5 +157,7 @@ export async function deleteFarm(farmId: string): Promise<void> {
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/farms");
-  redirect("/dashboard/farms");
+  // Deleted from the archived list — stay there so the user can keep
+  // deleting more without navigating back every time.
+  redirect("/dashboard/farms?status=archived");
 }

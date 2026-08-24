@@ -4,7 +4,7 @@ import { formatThaiDate } from "@/lib/payment";
 import { canCreateFarm } from "@/lib/plan-limits";
 import { UsageBar } from "./_components/UsageBar";
 import { PlanLimitNotice } from "./_components/PlanLimitNotice";
-import { ArchiveFarmButton, RestoreFarmButton } from "./_components/ArchiveButtons";
+import { ArchiveFarmButton, RestoreFarmButton, DeleteFarmButton } from "./_components/ArchiveButtons";
 
 type Farm = {
   id: string;
@@ -211,7 +211,10 @@ export default async function MyFarmsPage({
                     </>
                   )}
                   {isArchived && (
-                    <RestoreFarmButton farmId={f.id} farmName={f.name} canRestore={check.ok} />
+                    <>
+                      <RestoreFarmButton farmId={f.id} farmName={f.name} canRestore={check.ok} />
+                      <DeleteFarmButton farmId={f.id} farmName={f.name} />
+                    </>
                   )}
                 </div>
               </div>
