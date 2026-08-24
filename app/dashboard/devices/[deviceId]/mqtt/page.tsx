@@ -54,8 +54,6 @@ export default async function DeviceMqttPage({
 
   const deviceUid = device.device_uid as string;
   const customerUuid = (profile?.customer_identity_id as string | null) ?? "<customer-uuid-missing>";
-  const topicPrefix = (cred?.mqtt_topic_prefix as string | undefined)
-    ?? `smf/${customerUuid}/${deviceUid}`;
 
   return (
     <div>
@@ -126,34 +124,35 @@ export default async function DeviceMqttPage({
           </div>
 
           <div className="card p-6 space-y-4">
-            <h2 className="font-bold text-brand-800">MQTT Topics</h2>
-            <p className="text-xs text-brand-900/60">
-              Topic ที่ device นี้ publish/subscribe ผ่าน broker (multi-tenant scope: <code className="font-mono">smf/{`{customer_uuid}`}/{`{device_uid}`}/*</code>)
-            </p>
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-bold text-brand-900/60 uppercase tracking-wider mb-2">Publish (device → cloud)</div>
-                <div className="space-y-2">
-                  <CopyRow label="Telemetry" value={`${topicPrefix}/telemetry`} />
-                  <CopyRow label="Status" value={`${topicPrefix}/status`} />
-                  <CopyRow label="Command response" value={`${topicPrefix}/response`} />
-                  <CopyRow label="Event (generic)" value={`${topicPrefix}/event/+`} />
-                  <CopyRow label="Relay event" value={`${topicPrefix}/event/relay/+`} />
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-bold text-brand-900/60 uppercase tracking-wider mb-2">Subscribe (cloud → device)</div>
-                <div className="space-y-2">
-                  <CopyRow label="WiFi reset" value={`${topicPrefix}/cmd/wifi_reset`} />
-                  <CopyRow label="Restart" value={`${topicPrefix}/cmd/restart`} />
-                  <CopyRow label="Relay control" value={`${topicPrefix}/cmd/relay/+`} />
-                  <CopyRow label="Schedule config" value={`${topicPrefix}/config/schedule`} />
-                  <CopyRow label="Rules config" value={`${topicPrefix}/config/rules`} />
-                </div>
-              </div>
-            </div>
+            <h2 className="font-bold text-brand-800">🔧 เชื่อมต่อไม่ได้? เช็ค 4 ข้อนี้</h2>
+            <ol className="space-y-3 text-sm text-brand-900/80">
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">1</span>
+                <span>
+                  <strong>Host ต้องไม่มี</strong> <code className="font-mono bg-brand-50 px-1 rounded">http://</code> หรือ <code className="font-mono bg-brand-50 px-1 rounded">/</code> นำหน้า — พิมพ์แค่ <code className="font-mono bg-brand-50 px-1 rounded">mqtt.bkknex.com</code>
+                </span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">2</span>
+                <span>
+                  <strong>Password ตรงกับล่าสุดไหม?</strong> — ทุกครั้งที่กด &quot;สร้าง Credential ใหม่&quot; ด้านบน password เปลี่ยนทันที ต้องอัปเดตทั้ง Flutter app และ reflash ESP32 ด้วย password ใหม่เดียวกัน
+                </span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">3</span>
+                <span>
+                  <strong>TLS ต้องเปิด</strong> เสมอ (Port 8883) — ปิด TLS แล้วใช้ port เดิมจะเชื่อมไม่ติด
+                </span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">4</span>
+                <span>
+                  <strong>ESP32 ไม่ online?</strong> เช็คว่า WiFi บ้าน/ที่ทำงานยังใช้ได้ และ ESP32 เสียบไฟอยู่ — ลองกดปุ่ม Reset บนบอร์ด
+                </span>
+              </li>
+            </ol>
             <p className="text-xs text-brand-900/55 border-t border-border pt-3">
-              EMQX ACL บังคับ scope: device นี้ publish/subscribe ได้เฉพาะ topics ใต้ <code className="font-mono">{topicPrefix}/*</code>. ข้าม tenant / ข้าม device = deny.
+              ยังไม่หาย? Regenerate Credential ใหม่อีกครั้ง แล้ว Web USB flash ทันที (อย่าปิดหน้าก่อน flash เสร็จ)
             </p>
           </div>
         </div>
