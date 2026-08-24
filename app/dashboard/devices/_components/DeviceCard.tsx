@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
-import { ArchiveDeviceButton, RestoreDeviceButton } from "./DeviceArchiveButtons";
+import { ArchiveDeviceButton, RestoreDeviceButton, DeleteDeviceButton } from "./DeviceArchiveButtons";
 
 export type DeviceRow = {
   id: string;
@@ -113,11 +113,14 @@ export function DeviceCard({
           </>
         )}
         {isArchived && (
-          <RestoreDeviceButton
-            deviceId={device.id}
-            deviceLabel={device.device_uid}
-            canRestore={canRestore}
-          />
+          <>
+            <RestoreDeviceButton
+              deviceId={device.id}
+              deviceLabel={device.device_uid}
+              canRestore={canRestore}
+            />
+            <DeleteDeviceButton deviceId={device.id} deviceLabel={device.device_uid} />
+          </>
         )}
       </div>
     </div>
