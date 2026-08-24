@@ -21,7 +21,7 @@ export type DeviceRow = {
 
 const STATUS: Record<"online" | "offline" | "warning" | "never_connected", { label: string; cls: string; dot: string }> = {
   online: { label: "Online", cls: "bg-green-100 text-green-800", dot: "bg-green-500" },
-  offline: { label: "Offline", cls: "bg-brand-100 text-brand-700/70", dot: "bg-brand-400" },
+  offline: { label: "Offline", cls: "bg-red-100 text-red-700", dot: "bg-red-500" },
   warning: { label: "Warning", cls: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
   never_connected: { label: "Never Connected", cls: "bg-brand-100 text-brand-700/60", dot: "bg-brand-300" },
 };
