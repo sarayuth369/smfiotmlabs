@@ -36,8 +36,7 @@ const SUBNAV = [
   { key: "overview", label: "Overview", active: true },
   { key: "sensors", label: "Sensors" },
   { key: "control", label: "Control", soon: true },
-  { key: "firmware", label: "Firmware" },
-  { key: "mqtt", label: "MQTT" },
+  { key: "mqtt", label: "MQTT / Firmware" },
 ];
 
 export default async function DeviceDetailPage({
@@ -180,9 +179,7 @@ export default async function DeviceDetailPage({
                 ? "#sensors"
                 : n.key === "mqtt"
                   ? `/dashboard/devices/${deviceId}/mqtt`
-                  : n.key === "firmware"
-                    ? `/dashboard/devices/${deviceId}/flash`
-                    : null;
+                  : null;
             const cls = `px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
               n.active
                 ? "text-brand-800 border-b-2 border-brand-600"

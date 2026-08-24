@@ -66,9 +66,12 @@ export default async function DeviceMqttPage({
       </div>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-800">MQTT Configuration</h1>
+        <h1 className="text-2xl font-bold text-brand-800">MQTT / Firmware</h1>
         <p className="text-sm text-brand-900/60 mt-1">
           ข้อมูลเชื่อมต่อ MQTT (Phase 6 multi-tenant) — <span className="font-mono">{deviceUid}</span>
+        </p>
+        <p className="text-xs text-brand-900/50 mt-1">
+          บอร์ด ESP32 เสีย / เปลี่ยนบอร์ดใหม่? กด &quot;สร้าง Credential ใหม่&quot; ด้านล่าง แล้ว flash ต่อในหน้าเดียวกันได้เลย — ไม่ต้องสร้างอุปกรณ์ใหม่, NODE นี้ยังคงเดิมทุกอย่าง
         </p>
       </div>
 
