@@ -72,6 +72,9 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
       >
         {loading ? "กำลังสร้าง..." : "🔄 สร้าง Credential ใหม่"}
       </button>
+      <p className="mt-1.5 text-xs text-brand-900/50">
+        Flash firmware ใหม่ หรือเปลี่ยนบอร์ด ESP32 ใหม่ (บอร์ดเดิมเสีย) ต้องสร้าง Credential ใหม่เสมอ — เพราะ password เดิมดูซ้ำไม่ได้แล้ว (เก็บแค่ bcrypt hash)
+      </p>
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
