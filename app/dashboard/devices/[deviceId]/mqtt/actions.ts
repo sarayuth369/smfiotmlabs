@@ -11,6 +11,10 @@ import {
   generateDeviceCredentials,
   activateOnEmqxWebhook,
 } from "@/lib/device-provision";
+import {
+  buildProvisionFirmwareBundle,
+  type ProvisionFirmwareBundle,
+} from "../../actions";
 
 /**
  * Phase 6 — Regenerate MQTT credential for an existing device.
@@ -34,10 +38,16 @@ export async function regenerateDeviceCredential(
 ): Promise<
   | {
       ok: true;
+      device_id: string;
+      device_uid: string;
       mqtt_username: string;
       mqtt_password: string;
       broker_registered: boolean;
       acl_rules?: number;
+      // Patched firmware for THIS rotate — required so the new password
+      // can be flashed immediately, in the same modal, before the
+      // plaintext leaves memory (it is never persisted anywhere).
+      firmware: ProvisionFirmwareBundle;
     }
   | { ok: false; error: string }
 > {
@@ -133,15 +143,29 @@ export async function regenerateDeviceCredential(
     };
   }
 
+  // Build patched firmware for THIS new password so the modal can offer
+  // an immediate Web USB flash — the plaintext password never needs to be
+  // displayed/copied/pasted into firmware manually, and it can't go stale
+  // between "regenerate" and "flash" because they happen in one screen.
+  const firmware = await buildProvisionFirmwareBundle(
+    admin,
+    creds,
+    customerIdentityId,
+    "SMF-MAIN-V1"
+  );
+
   // Deliberately DO NOT revalidatePath here — revalidate re-renders the
   // page and unmounts the RegenerateButton modal that is holding the
   // ONE-TIME plaintext password. User must be able to copy it before it
   // vanishes. The Credential card auto-refreshes on next navigation.
   return {
     ok: true,
+    device_id: deviceId,
+    device_uid: deviceUid,
     mqtt_username: creds.mqtt_username,
     mqtt_password: creds.mqtt_password,
     broker_registered: true,
+    firmware,
     acl_rules: activation.acl_rules,
   };
 }

@@ -2,10 +2,23 @@
 
 import { useState } from "react";
 import { regenerateDeviceCredential } from "../actions";
+import { ProvisionInstallFlasher } from "../../../_components/ProvisionInstallFlasher";
+import type { FirmwareArtifactB64 } from "../../../actions";
+
+type RegenResult = {
+  username: string;
+  password: string;
+  deviceId: string;
+  deviceUid: string;
+  firmwareAvailable: boolean;
+  releaseVersion?: string;
+  artifacts?: FirmwareArtifactB64[];
+  firmwareReason?: string;
+};
 
 export function RegenerateButton({ deviceId }: { deviceId: string }) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ username: string; password: string } | null>(null);
+  const [result, setResult] = useState<RegenResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -23,7 +36,16 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
     try {
       const r = await regenerateDeviceCredential(deviceId);
       if (r.ok) {
-        setResult({ username: r.mqtt_username, password: r.mqtt_password });
+        setResult({
+          username: r.mqtt_username,
+          password: r.mqtt_password,
+          deviceId: r.device_id,
+          deviceUid: r.device_uid,
+          firmwareAvailable: r.firmware.available,
+          releaseVersion: r.firmware.available ? r.firmware.release_version : undefined,
+          artifacts: r.firmware.available ? r.firmware.artifacts : undefined,
+          firmwareReason: !r.firmware.available ? r.firmware.reason : undefined,
+        });
       } else {
         setError(r.error);
       }
@@ -75,13 +97,30 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
             <div>
               <strong>Flutter app</strong>: MQTT Broker → Host <code className="font-mono">mqtt.bkknex.com</code> Port <code>8883</code> TLS ON, Username + Password ข้างบน → Save → เชื่อมต่อใหม่
             </div>
-            <div>
-              <strong>ESP32</strong>: ต้อง Web USB re-flash firmware — เพราะ password ใหม่ถูก patch เข้า ProvisioningSlot ตอน flash. ไปที่หน้า &quot;เพิ่มอุปกรณ์&quot; → เลือก device เดิม (หรือ provision ใหม่) → กด &quot;🔌 ติดตั้ง Firmware&quot;.
-            </div>
             <div className="text-amber-900/70">
               EMQX broker activation = อัตโนมัติผ่าน webhook (mqtt.bkknex.com:8443). ไม่ต้อง SSH หรือ manual config.
             </div>
           </div>
+
+          {result.firmwareAvailable && result.artifacts ? (
+            <div className="mt-4">
+              <div className="text-sm font-bold text-amber-900 mb-2">
+                ESP32 — flash password ใหม่ตอนนี้เลย (ก่อนปิดหน้านี้)
+              </div>
+              <ProvisionInstallFlasher
+                deviceId={result.deviceId}
+                deviceUid={result.deviceUid}
+                releaseVersion={result.releaseVersion!}
+                artifacts={result.artifacts}
+              />
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-900">
+              <strong>⚠ Firmware ไม่พร้อม flash อัตโนมัติ:</strong> {result.firmwareReason}
+              <br />
+              Password นี้จะหายถาวรเมื่อปิดหน้านี้ — แก้ปัญหา firmware ก่อนแล้ว Regenerate ใหม่.
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -269,7 +269,7 @@ export type ProvisionResult =
  * Returns { available:false } when no base firmware release exists —
  * caller shows admin-upload hint instead of failing hard.
  */
-async function buildProvisionFirmwareBundle(
+export async function buildProvisionFirmwareBundle(
   admin: ReturnType<typeof createAdminClient>,
   creds: ProvisionedCredentials,
   customer_identity_id: string,
