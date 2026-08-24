@@ -583,5 +583,7 @@ export async function deleteDevice(deviceId: string): Promise<void> {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/devices");
   revalidatePath(`/dashboard/farms/${current.farm_id}/devices`);
-  redirect("/dashboard/devices");
+  // Deleted from the archived list — stay there so the user can keep
+  // deleting more without navigating back every time.
+  redirect("/dashboard/devices?status=archived");
 }
