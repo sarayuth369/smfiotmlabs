@@ -155,7 +155,7 @@ export default async function DashboardPage() {
 
       <NotificationsPanel items={notifications} />
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
+      <div className="grid sm:grid-cols-2 gap-5 mt-8">
         <div className="card p-6 flex flex-col">
           <div className="flex items-baseline justify-between">
             <div className="text-sm font-semibold text-brand-800">ฟาร์มของฉัน</div>
@@ -189,7 +189,7 @@ export default async function DashboardPage() {
 
         <div className="card p-6 flex flex-col">
           <div className="flex items-baseline justify-between">
-            <div className="text-sm font-semibold text-brand-800">อุปกรณ์ (SMF IoT Node)</div>
+            <div className="text-sm font-semibold text-brand-800">สั่งซื้ออุปกรณ์ (SMF IoT Node)</div>
             <div className="text-2xl font-extrabold text-brand-800">{nodeCount.toLocaleString()}</div>
           </div>
           <p className="mt-1 text-sm text-brand-900/60 flex-1">
@@ -199,17 +199,8 @@ export default async function DashboardPage() {
           </p>
           <div className="mt-4 flex items-center gap-1.5 flex-nowrap">
             <Link
-              href="/dashboard/devices/new"
-              className="inline-flex items-center gap-1 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-semibold px-2.5 py-1.5 transition whitespace-nowrap"
-            >
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              เพิ่มอุปกรณ์
-            </Link>
-            <Link
               href="/iot-nodes"
-              className="inline-flex items-center gap-1 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-[11px] font-semibold px-2.5 py-1.5 transition whitespace-nowrap"
+              className="inline-flex items-center gap-1 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-semibold px-2.5 py-1.5 transition whitespace-nowrap"
             >
               <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2l1 4h11l-2 8H8L6 6H3" />
@@ -229,17 +220,6 @@ export default async function DashboardPage() {
               ตรวจสอบสั่งซื้อ
             </Link>
           </div>
-        </div>
-
-        <div className="card p-6 flex flex-col">
-          <div className="text-sm font-semibold text-brand-800">การแจ้งเตือน</div>
-          <p className="mt-1 text-sm text-brand-900/60 flex-1">ตั้งค่า LINE Notify และเงื่อนไขการแจ้งเตือน</p>
-          <button
-            type="button"
-            className="mt-4 self-start rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 transition"
-          >
-            ตั้งค่า
-          </button>
         </div>
       </div>
 
