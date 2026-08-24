@@ -86,7 +86,7 @@ export default async function FarmDetailPage({
     { key: "overview", label: "ภาพรวม" }, // current page
     { key: "zones", label: "แปลง / Zone", href: `/dashboard/farms/${farmId}/zones` },
     { key: "nodes", label: "อุปกรณ์ IoT", href: `/dashboard/farms/${farmId}/devices` },
-    { key: "sensors", label: "Sensors", soon: true },
+    { key: "sensors", label: "Sensors", href: `/dashboard/farms/${farmId}/sensors` },
     { key: "automation", label: "Automation", soon: true },
     { key: "notifications", label: "การแจ้งเตือน", soon: true },
     { key: "reports", label: "รายงาน", soon: true },

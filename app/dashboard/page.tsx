@@ -42,6 +42,15 @@ export default async function DashboardPage() {
   const sensorPct = usagePercent(sensorCount, userPlan.limits.max_sensors);
   const sensorLimitLabel = formatLimit(userPlan.limits.max_sensors);
 
+  const { data: ordersRaw } = await supabase
+    .from("orders")
+    .select("quantity, status")
+    .eq("user_id", user!.id)
+    .neq("status", "canceled");
+  const orders = ordersRaw ?? [];
+  const orderCount = orders.length;
+  const orderedDeviceCount = orders.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0);
+
   const { data: notifs } = await supabase
     .from("notifications")
     .select("id, title, message, read_at, created_at")
@@ -190,12 +199,12 @@ export default async function DashboardPage() {
         <div className="card p-6 flex flex-col">
           <div className="flex items-baseline justify-between">
             <div className="text-sm font-semibold text-brand-800">สั่งซื้ออุปกรณ์ (SMF IoT Node)</div>
-            <div className="text-2xl font-extrabold text-brand-800">{nodeCount.toLocaleString()}</div>
+            <div className="text-2xl font-extrabold text-brand-800">{orderCount.toLocaleString()}</div>
           </div>
           <p className="mt-1 text-sm text-brand-900/60 flex-1">
-            {nodeCount > 0
-              ? `เชื่อมต่ออุปกรณ์แล้ว ${nodeCount} ตัว`
-              : "ยังไม่มีอุปกรณ์ที่เชื่อมต่อ"}
+            {orderedDeviceCount > 0
+              ? `จำนวนอุปกรณ์ที่สั่งซื้อ ${orderedDeviceCount} ตัว`
+              : "จำนวนอุปกรณ์ที่สั่งซื้อ 0 ตัว"}
           </p>
           <div className="mt-4 flex items-center gap-1.5 flex-nowrap">
             <Link
