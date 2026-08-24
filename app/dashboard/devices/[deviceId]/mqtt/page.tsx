@@ -124,7 +124,7 @@ export default async function DeviceMqttPage({
           </div>
 
           <div className="card p-6 space-y-4">
-            <h2 className="font-bold text-brand-800">🔧 เชื่อมต่อไม่ได้? เช็ค 4 ข้อนี้</h2>
+            <h2 className="font-bold text-brand-800">🔧 แอปเชื่อมต่อไม่ได้? เช็ค 4 ข้อนี้</h2>
             <ol className="space-y-3 text-sm text-brand-900/80">
               <li className="flex gap-2.5">
                 <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">1</span>
@@ -135,7 +135,7 @@ export default async function DeviceMqttPage({
               <li className="flex gap-2.5">
                 <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">2</span>
                 <span>
-                  <strong>Password ตรงกับล่าสุดไหม?</strong> — ทุกครั้งที่กด &quot;สร้าง Credential ใหม่&quot; ด้านบน password เปลี่ยนทันที ต้องอัปเดตทั้ง Flutter app และ reflash ESP32 ด้วย password ใหม่เดียวกัน
+                  <strong>Password ตรงกับล่าสุดไหม?</strong> — ทุกครั้งที่กด &quot;สร้าง Credential ใหม่&quot; ด้านบน password เปลี่ยนทันที ต้องอัปเดตทั้ง App และ reflash ESP32 ด้วย password ใหม่เดียวกัน
                 </span>
               </li>
               <li className="flex gap-2.5">
