@@ -35,7 +35,6 @@ const STATUS_CLS: Record<"online" | "offline" | "warning" | "never_connected", s
 const SUBNAV = [
   { key: "overview", label: "Overview", active: true },
   { key: "sensors", label: "Sensors" },
-  { key: "control", label: "Control", soon: true },
   { key: "mqtt", label: "MQTT / Firmware" },
 ];
 
@@ -187,23 +186,13 @@ export default async function DeviceDetailPage({
                   ? "text-brand-800 hover:text-brand-600"
                   : "text-brand-900/40"
             }`;
-            const content = (
-              <>
-                {n.label}
-                {n.soon && (
-                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-600 align-middle">
-                    Soon
-                  </span>
-                )}
-              </>
-            );
             return linkHref ? (
               <a key={n.key} href={linkHref} className={cls}>
-                {content}
+                {n.label}
               </a>
             ) : (
-              <div key={n.key} className={cls} title={n.soon ? "เร็ว ๆ นี้" : undefined}>
-                {content}
+              <div key={n.key} className={cls}>
+                {n.label}
               </div>
             );
           })}
