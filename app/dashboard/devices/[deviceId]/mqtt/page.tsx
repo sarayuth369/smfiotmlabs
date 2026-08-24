@@ -83,8 +83,9 @@ export default async function DeviceMqttPage({
             </div>
             <CopyRow label="Full URL (mqtt.js / PubSubClient)" value={`mqtts://${BROKER_HOST}:${BROKER_PORT_TLS}`} />
             <CopyRow label="Client ID" value={deviceUid} />
+            <CopyRow label="Customer UUID" value={customerUuid} />
             <p className="text-xs text-brand-900/55 border-t border-border pt-3">
-              TLS ใช้ Let&apos;s Encrypt ISRG Root X1. Client ID = device_uid (ฝัง firmware ที่ ProvisioningSlot ตอน Web USB flash).
+              TLS ใช้ Let&apos;s Encrypt ISRG Root X1. Client ID = device_uid (ฝัง firmware ที่ ProvisioningSlot ตอน Web USB flash). Customer UUID ใช้ตอนตั้งค่า Flutter app (Phase 6 — Multi-tenant scope).
             </p>
           </div>
 
