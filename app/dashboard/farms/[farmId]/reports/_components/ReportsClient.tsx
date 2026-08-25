@@ -5,10 +5,13 @@ import {
   getSensorSummary,
   getSensorTrend,
   getDailySummary,
+  getExportPeriodOptions,
+  exportSensorHistoryCsv,
   type ReportSensorOption,
   type SensorSummary,
   type TrendPoint,
   type DailyBar,
+  type ExportPeriodInfo,
 } from "../actions";
 import { SvgLineChart } from "@/app/dashboard/_components/SvgLineChart";
 import { SvgBarChart } from "@/app/dashboard/_components/SvgBarChart";
@@ -27,6 +30,18 @@ export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: Re
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [daily, setDaily] = useState<DailyBar[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [exportInfo, setExportInfo] = useState<ExportPeriodInfo | null>(null);
+  const [exportDays, setExportDays] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getExportPeriodOptions(farmId).then((info) => {
+      setExportInfo(info);
+      setExportDays(info.options[info.options.length - 1] ?? null);
+    });
+  }, [farmId]);
 
   useEffect(() => {
     if (!sensorId) {
@@ -50,6 +65,27 @@ export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: Re
       cancelled = true;
     };
   }, [farmId, sensorId, period]);
+
+  async function handleExport() {
+    if (!sensorId || !exportDays) return;
+    setExporting(true);
+    setExportError(null);
+    const res = await exportSensorHistoryCsv(farmId, sensorId, exportDays);
+    setExporting(false);
+    if (!res.ok) {
+      setExportError(res.error);
+      return;
+    }
+    const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = res.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   if (sensors.length === 0) {
     return (
@@ -98,6 +134,41 @@ export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: Re
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-3">
+          {!exportInfo ? null : !exportInfo.planAllowsHistory ? (
+            <p className="text-sm text-brand-900/50">Sensor history ไม่รองรับในแพ็กเกจปัจจุบัน</p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-xs text-brand-900/70">
+                Export ย้อนหลัง
+                <select
+                  value={exportDays ?? ""}
+                  onChange={(e) => setExportDays(Number(e.target.value))}
+                  className="rounded-lg border border-border px-2 py-1 text-xs"
+                >
+                  {exportInfo.options.map((d) => (
+                    <option key={d} value={d}>
+                      {d} วัน
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting || !exportDays || (summary?.samples ?? 0) === 0}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-3.5 py-2 transition"
+              >
+                {exporting ? "กำลังสร้างไฟล์..." : "⬇ Export CSV"}
+              </button>
+              {(summary?.samples ?? 0) === 0 && !loading && (
+                <span className="text-xs text-brand-900/45">ไม่มีข้อมูลประวัติในช่วงเวลานี้</span>
+              )}
+              {exportError && <span className="text-xs text-red-700">{exportError}</span>}
+            </>
+          )}
         </div>
       </div>
 

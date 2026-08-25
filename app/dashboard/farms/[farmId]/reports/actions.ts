@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 
 async function requireOwnedFarm(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -250,4 +251,228 @@ export async function getDailySummary(farmId: string, sensorId: string): Promise
       min: Math.min(...values),
       max: Math.max(...values),
     }));
+}
+
+// ============================================================
+// Phase 6.9A — CSV export
+// ============================================================
+// Export runs entirely server-side (this "use server" action) so the
+// authorized query — not a client-suppliable device UID or customer id —
+// decides what rows come back. The client only ever gets a finished CSV
+// string for a sensor it has already proven ownership of via the Reports
+// page it's rendered from.
+
+const TZ = "Asia/Bangkok";
+// No plan currently needs more than 30 days in a single export file — this
+// is a hard ceiling independent of retention, purely to keep exports small
+// and fast (never load the full retention window into one CSV/response).
+const EXPORT_HARD_CAP_DAYS = 30;
+const EXPORT_ROW_CAP = 20000;
+
+function fmtDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    new Date(iso)
+  );
+}
+
+function fmtDateTime(iso: string): string {
+  const timePart = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+  return `${fmtDate(iso)} ${timePart}`;
+}
+
+/** Strip newlines (never let free-text break CSV row structure) and trim. */
+function cleanText(v: string | null | undefined): string {
+  return (v ?? "").replace(/[\r\n]+/g, " ").trim();
+}
+
+/** RFC4180 quoting — wraps in quotes only when the field needs it. */
+function csvQuote(s: string): string {
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * Data-grid cell for free-text, user-editable values (farm/zone/node/sensor
+ * name, unit, customer name). These sit at the START of their CSV field, so
+ * a value beginning with = + - @ could execute as a formula in Excel/Sheets
+ * when the file is opened — prefix with a literal quote char to neutralize
+ * that per OWASP CSV-injection guidance, then apply normal RFC4180 quoting.
+ */
+function csvUserText(v: string | null | undefined): string {
+  let s = cleanText(v);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return csvQuote(s);
+}
+
+/** Data-grid cell for server-controlled values (dates, UIDs, enums, numbers) — no injection risk, just quoting. */
+function csvPlain(v: string | number | null | undefined): string {
+  return csvQuote(v === null || v === undefined ? "" : String(v));
+}
+
+function safeFilenamePart(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "sensor";
+}
+
+export type ExportPeriodInfo = {
+  /** Max days a single export may cover — min(plan retention, hard cap). null retention (unlimited) still caps at the hard limit. */
+  maxDays: number;
+  /** Pre-validated day choices for the export period dropdown. */
+  options: number[];
+  retentionDays: number | null;
+  planAllowsHistory: boolean;
+};
+
+export async function getExportPeriodOptions(farmId: string): Promise<ExportPeriodInfo> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { maxDays: 0, options: [], retentionDays: null, planAllowsHistory: false };
+  await requireOwnedFarm(supabase, user.id, farmId);
+
+  const plan = await getUserPlan(supabase, user.id);
+  const planAllowsHistory = hasFeature(plan, "sensor_history");
+  const retentionDays = plan.limits.sensor_history_days;
+  const maxDays = retentionDays === null ? EXPORT_HARD_CAP_DAYS : Math.min(retentionDays, EXPORT_HARD_CAP_DAYS);
+
+  const candidates = [1, 3, 7, 14, 30].filter((d) => d <= maxDays);
+  const options = [...new Set([...candidates, maxDays])].sort((a, b) => a - b);
+
+  return { maxDays, options, retentionDays, planAllowsHistory };
+}
+
+export type ExportResult = { ok: true; csv: string; filename: string } | { ok: false; error: string };
+
+/**
+ * Generates a CSV export of one sensor's history for the requesting user.
+ * `days` is re-validated here against the user's PLAN, not trusted from the
+ * caller — a Server Action's arguments are just POST body fields a client
+ * could tamper with, so the UI only offering valid choices is not enough.
+ */
+export async function exportSensorHistoryCsv(farmId: string, sensorId: string, days: number): Promise<ExportResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  await requireOwnedFarm(supabase, user.id, farmId);
+
+  const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "sensor_history")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Sensor History` };
+  }
+
+  const retentionDays = plan.limits.sensor_history_days;
+  const maxDays = retentionDays === null ? EXPORT_HARD_CAP_DAYS : Math.min(retentionDays, EXPORT_HARD_CAP_DAYS);
+  const requestedDays = Math.floor(days);
+  if (!Number.isFinite(requestedDays) || requestedDays < 1 || requestedDays > maxDays) {
+    return { ok: false, error: `ช่วงเวลาสำหรับ export ต้องอยู่ระหว่าง 1-${maxDays} วัน ตามสิทธิ์แพ็กเกจ ${plan.name}` };
+  }
+
+  // Ownership chain resolved in one query: sensor -> device -> farm (must
+  // equal farmId AND belong to this user) -> zone. Nothing here is trusted
+  // from the client except the ids, and every id is checked against auth.uid().
+  const { data } = await supabase
+    .from("sensors")
+    .select(
+      "id, name, sensor_type, unit, iot_nodes!inner(id, device_name, device_uid, farm_id, farms!inner(id, name, user_id), zones(name))"
+    )
+    .eq("id", sensorId)
+    .eq("iot_nodes.farm_id", farmId)
+    .maybeSingle();
+
+  type SensorRow = {
+    id: string;
+    name: string;
+    sensor_type: string;
+    unit: string | null;
+    iot_nodes:
+      | {
+          id: string;
+          device_name: string;
+          device_uid: string;
+          farm_id: string;
+          farms: { id: string; name: string; user_id: string } | { id: string; name: string; user_id: string }[];
+          zones: { name: string } | { name: string }[] | null;
+        }
+      | Array<{
+          id: string;
+          device_name: string;
+          device_uid: string;
+          farm_id: string;
+          farms: { id: string; name: string; user_id: string } | { id: string; name: string; user_id: string }[];
+          zones: { name: string } | { name: string }[] | null;
+        }>;
+  };
+  const raw = data as unknown as SensorRow | null;
+  const node = raw ? (Array.isArray(raw.iot_nodes) ? raw.iot_nodes[0] : raw.iot_nodes) : null;
+  const farm = node ? (Array.isArray(node.farms) ? node.farms[0] : node.farms) : null;
+  const zone = node ? (Array.isArray(node.zones) ? node.zones[0] : node.zones) : null;
+
+  if (!raw || !node || !farm || farm.user_id !== user.id) {
+    return { ok: false, error: "ไม่พบ Sensor หรือคุณไม่มีสิทธิ์เข้าถึง" };
+  }
+
+  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  const customerName = (profile?.full_name as string | null) || user.email || "-";
+
+  const nowMs = Date.now();
+  const sinceIso = new Date(nowMs - requestedDays * 86_400_000).toISOString();
+  const nowIso = new Date(nowMs).toISOString();
+
+  const { data: readings } = await supabase
+    .from("sensor_readings")
+    .select("value, occurred_at")
+    .eq("sensor_id", sensorId)
+    .gte("occurred_at", sinceIso)
+    .order("occurred_at", { ascending: true })
+    .limit(EXPORT_ROW_CAP);
+
+  const rows = readings ?? [];
+
+  const lines: string[] = [];
+  lines.push(csvPlain(`Report Generated At: ${fmtDateTime(nowIso)}`));
+  lines.push(csvPlain(`Report Period: ${fmtDateTime(sinceIso)} to ${fmtDateTime(nowIso)}`));
+  lines.push(csvPlain(`Timezone: ${TZ}`));
+  lines.push(csvPlain(`Customer: ${cleanText(customerName)}`));
+  lines.push(csvPlain(`Farm: ${cleanText(farm.name)}`));
+  lines.push(csvPlain(`Node Name: ${cleanText(node.device_name)}`));
+  lines.push(csvPlain(`Device UID: ${node.device_uid}`));
+  lines.push(csvPlain(`Sensor: ${cleanText(raw.name)}${raw.unit ? ` (${cleanText(raw.unit)})` : ""}`));
+  lines.push(""); // blank separator row before the data table
+
+  lines.push(
+    ["Report Date", "Customer", "Farm", "Zone", "Node Name", "Device UID", "Sensor", "Sensor Type", "Unit", "Recorded At", "Value"].join(
+      ","
+    )
+  );
+
+  for (const r of rows) {
+    const occurredAt = r.occurred_at as string;
+    lines.push(
+      [
+        csvPlain(fmtDate(occurredAt)),
+        csvUserText(customerName),
+        csvUserText(farm.name),
+        csvUserText(zone?.name ?? ""),
+        csvUserText(node.device_name),
+        csvPlain(node.device_uid),
+        csvUserText(raw.name),
+        csvPlain(raw.sensor_type),
+        csvUserText(raw.unit ?? ""),
+        csvPlain(fmtDateTime(occurredAt)),
+        csvPlain(Number(r.value)),
+      ].join(",")
+    );
+  }
+
+  const csv = lines.join("\r\n");
+  const filename = `SMF_Report_${safeFilenamePart(node.device_uid)}_${safeFilenamePart(raw.name)}_${fmtDate(nowIso)}.csv`;
+
+  return { ok: true, csv, filename };
 }
