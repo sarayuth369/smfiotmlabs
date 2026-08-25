@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { SvgLineChart } from "@/app/dashboard/_components/SvgLineChart";
 import { SvgBarChart } from "@/app/dashboard/_components/SvgBarChart";
+import { FeatureLockedNotice } from "@/app/dashboard/_components/FeatureLockedNotice";
 
 /**
  * Encodes as UTF-16LE with a leading BOM instead of UTF-8. Non-Microsoft-365
@@ -158,33 +159,46 @@ export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: Re
         </div>
 
         {exportInfo && (
-          <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-brand-900/70">
-              Export ย้อนหลัง
-              <select
-                value={exportDays ?? ""}
-                onChange={(e) => setExportDays(Number(e.target.value))}
-                className="rounded-lg border border-border px-2 py-1 text-xs"
-              >
-                {exportInfo.options.map((d) => (
-                  <option key={d} value={d}>
-                    {d} วัน
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exporting || !exportDays || (summary?.samples ?? 0) === 0}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-3.5 py-2 transition"
+          <div className="mt-3 pt-3 border-t border-border">
+            <div
+              className={`flex flex-wrap items-center gap-3 ${
+                !exportInfo.planAllowsExport ? "opacity-40 pointer-events-none select-none" : ""
+              }`}
             >
-              {exporting ? "กำลังสร้างไฟล์..." : "⬇ Export CSV"}
-            </button>
-            {(summary?.samples ?? 0) === 0 && !loading && (
-              <span className="text-xs text-brand-900/45">ไม่มีข้อมูลประวัติในช่วงเวลานี้</span>
+              <label className="flex items-center gap-2 text-xs text-brand-900/70">
+                Export ย้อนหลัง
+                <select
+                  value={exportDays ?? ""}
+                  onChange={(e) => setExportDays(Number(e.target.value))}
+                  disabled={!exportInfo.planAllowsExport}
+                  className="rounded-lg border border-border px-2 py-1 text-xs"
+                >
+                  {exportInfo.options.map((d) => (
+                    <option key={d} value={d}>
+                      {d} วัน
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={!exportInfo.planAllowsExport || exporting || !exportDays || (summary?.samples ?? 0) === 0}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-3.5 py-2 transition"
+              >
+                {exporting ? "กำลังสร้างไฟล์..." : "⬇ Export CSV"}
+              </button>
+              {exportInfo.planAllowsExport && (summary?.samples ?? 0) === 0 && !loading && (
+                <span className="text-xs text-brand-900/45">ไม่มีข้อมูลประวัติในช่วงเวลานี้</span>
+              )}
+              {exportError && <span className="text-xs text-red-700">{exportError}</span>}
+            </div>
+
+            {!exportInfo.planAllowsExport && (
+              <div className="mt-3">
+                <FeatureLockedNotice planName={exportInfo.planName} featureLabel="Export CSV" compact />
+              </div>
             )}
-            {exportError && <span className="text-xs text-red-700">{exportError}</span>}
           </div>
         )}
       </div>

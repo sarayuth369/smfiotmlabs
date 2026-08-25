@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getUserPlan } from "@/lib/plan-limits";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 
 async function requireOwnedFarm(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -317,6 +317,8 @@ export type ExportPeriodInfo = {
   /** Pre-validated day choices for the export period dropdown. */
   options: number[];
   retentionDays: number | null;
+  planAllowsExport: boolean;
+  planName: string;
 };
 
 export async function getExportPeriodOptions(farmId: string): Promise<ExportPeriodInfo> {
@@ -324,7 +326,7 @@ export async function getExportPeriodOptions(farmId: string): Promise<ExportPeri
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { maxDays: 0, options: [], retentionDays: null };
+  if (!user) return { maxDays: 0, options: [], retentionDays: null, planAllowsExport: false, planName: "" };
   await requireOwnedFarm(supabase, user.id, farmId);
 
   const plan = await getUserPlan(supabase, user.id);
@@ -334,7 +336,7 @@ export async function getExportPeriodOptions(farmId: string): Promise<ExportPeri
   const candidates = [1, 3, 7, 14, 30].filter((d) => d <= maxDays);
   const options = [...new Set([...candidates, maxDays])].sort((a, b) => a - b);
 
-  return { maxDays, options, retentionDays };
+  return { maxDays, options, retentionDays, planAllowsExport: hasFeature(plan, "csv_export"), planName: plan.name };
 }
 
 export type ExportResult = { ok: true; csv: string; filename: string } | { ok: false; error: string };
@@ -354,6 +356,10 @@ export async function exportSensorHistoryCsv(farmId: string, sensorId: string, d
   await requireOwnedFarm(supabase, user.id, farmId);
 
   const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "csv_export")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Export CSV` };
+  }
+
   const retentionDays = plan.limits.sensor_history_days;
   const maxDays = retentionDays === null ? EXPORT_HARD_CAP_DAYS : Math.min(retentionDays, EXPORT_HARD_CAP_DAYS);
   const requestedDays = Math.floor(days);

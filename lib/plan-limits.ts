@@ -33,10 +33,28 @@ const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: { reports: true, rules: true, sheets_export: true },
-  pro: { line_notify: true, reports: true, rules: true, sheets_export: true },
-  business: { line_notify: true, reports: true, ota: true, api: true, automation: true, rules: true, sheets_export: true },
-  enterprise: { line_notify: true, reports: true, ota: true, api: true, automation: true, rules: true, sheets_export: true },
+  starter: { reports: true, rules: true, sheets_export: true, csv_export: true },
+  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true },
+  business: {
+    line_notify: true,
+    reports: true,
+    ota: true,
+    api: true,
+    automation: true,
+    rules: true,
+    sheets_export: true,
+    csv_export: true,
+  },
+  enterprise: {
+    line_notify: true,
+    reports: true,
+    ota: true,
+    api: true,
+    automation: true,
+    rules: true,
+    sheets_export: true,
+    csv_export: true,
+  },
 };
 
 const FALLBACK_META: Record<
@@ -115,6 +133,7 @@ export const KNOWN_FEATURES = [
   { key: "reports", label: "Reports" },
   { key: "automation", label: "Automation" },
   { key: "rules", label: "Rules" },
+  { key: "csv_export", label: "Export CSV" },
   { key: "ai", label: "AI Analysis" },
   { key: "priority_support", label: "Priority Support" },
 ] as const;
