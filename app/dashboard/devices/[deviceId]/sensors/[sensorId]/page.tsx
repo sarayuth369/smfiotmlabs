@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { SENSOR_TYPES, isValidSensorType, sensorTypeLabel, sensorTypeIcon } from "@/lib/sensor-types";
-import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 import { LiveSensorValue } from "../../_components/LiveSensorValue";
 import { SensorHistorySection } from "./_components/SensorHistorySection";
 import { getSensorHistorySummary } from "./history-actions";
@@ -76,8 +75,6 @@ export default async function SensorDetailPage({
   const typeLabel = sensorTypeLabel(raw.sensor_type);
   const unit = raw.unit ?? (isValidSensorType(raw.sensor_type) ? SENSOR_TYPES[raw.sensor_type].unit : "-");
 
-  const plan = await getUserPlan(supabase, user!.id);
-  const planAllowsHistory = hasFeature(plan, "sensor_history");
   const historySummary = await getSensorHistorySummary(deviceId, sensorId);
 
   return (
@@ -182,7 +179,6 @@ export default async function SensorDetailPage({
               sensorId={sensorId}
               unit={unit}
               initialSummary={historySummary}
-              planAllowsHistory={planAllowsHistory}
             />
           )}
         </div>

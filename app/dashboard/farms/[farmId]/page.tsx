@@ -90,6 +90,8 @@ export default async function FarmDetailPage({
     { key: "controls", label: "Controls", href: `/dashboard/farms/${farmId}/controls` },
     { key: "rules", label: "Rules", href: `/dashboard/farms/${farmId}/rules` },
     { key: "notifications", label: "การแจ้งเตือน", href: `/dashboard/farms/${farmId}/notifications` },
+    { key: "api", label: "API Access", soon: true },
+    { key: "ai", label: "AI Analysis", soon: true },
     { key: "reports", label: "รายงาน", href: `/dashboard/farms/${farmId}/reports` },
   ];
 

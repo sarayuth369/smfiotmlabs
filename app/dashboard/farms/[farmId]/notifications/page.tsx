@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 import { getDeviceNotificationConfig } from "./actions";
 import { DeviceNotificationsPanel } from "./_components/DeviceNotificationsPanel";
 
@@ -24,6 +25,10 @@ export default async function FarmNotificationsPage({
     .eq("user_id", user!.id)
     .maybeSingle();
   if (!farm) notFound();
+
+  const plan = await getUserPlan(supabase, user!.id);
+  const planAllowsLine = hasFeature(plan, "line_notify");
+  const planAllowsSheets = hasFeature(plan, "sheets_export");
 
   const { data: deviceRows } = await supabase
     .from("iot_nodes")
@@ -72,6 +77,9 @@ export default async function FarmNotificationsPage({
               deviceUid={device.device_uid}
               initialLine={deviceConfigs[i].line}
               initialSheets={deviceConfigs[i].sheets}
+              planName={plan.name}
+              planAllowsLine={planAllowsLine}
+              planAllowsSheets={planAllowsSheets}
             />
           ))}
         </div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { publishToDevice, getDeviceRetained } from "@/lib/device-mqtt";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 
 export type LineConfig = {
   en: boolean;
@@ -100,6 +101,11 @@ export async function saveLineConfig(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "unauthenticated" };
 
+  const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "line_notify")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ LINE Notify` };
+  }
+
   const { device_uid, customer_uuid, farm_id } = await requireOwnedDevice(supabase, user.id, deviceId);
   const result = await publishToDevice(customer_uuid, device_uid, "config_line", config, { retain: true });
   if (result.ok) revalidatePath(`/dashboard/farms/${farm_id}/notifications`);
@@ -115,6 +121,11 @@ export async function saveSheetsConfig(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "unauthenticated" };
+
+  const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "sheets_export")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Google Sheet` };
+  }
 
   const { device_uid, customer_uuid, farm_id } = await requireOwnedDevice(supabase, user.id, deviceId);
   const result = await publishToDevice(customer_uuid, device_uid, "config_sheets", config, { retain: true });

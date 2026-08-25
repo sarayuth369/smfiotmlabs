@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
+import { FeatureLockedNotice } from "@/app/dashboard/_components/FeatureLockedNotice";
 import { getDeviceScheduleAndRules } from "./actions";
 import { DeviceRulesPanel } from "./_components/DeviceRulesPanel";
 
@@ -25,6 +27,9 @@ export default async function FarmRulesPage({
     .maybeSingle();
   if (!farm) notFound();
 
+  const plan = await getUserPlan(supabase, user!.id);
+  const planAllowsRules = hasFeature(plan, "rules");
+
   const { data: deviceRows } = await supabase
     .from("iot_nodes")
     .select("id, device_uid, device_name")
@@ -33,7 +38,7 @@ export default async function FarmRulesPage({
     .order("device_name");
   const devices = (deviceRows ?? []) as DeviceRow[];
 
-  const deviceData = await Promise.all(devices.map((d) => getDeviceScheduleAndRules(d.id)));
+  const deviceData = planAllowsRules ? await Promise.all(devices.map((d) => getDeviceScheduleAndRules(d.id))) : [];
 
   return (
     <div>
@@ -50,7 +55,9 @@ export default async function FarmRulesPage({
         </p>
       </div>
 
-      {devices.length === 0 ? (
+      {!planAllowsRules ? (
+        <FeatureLockedNotice planName={plan.name} featureLabel="Rules" />
+      ) : devices.length === 0 ? (
         <div className="card p-10 text-center">
           <div className="text-4xl">🧩</div>
           <div className="mt-3 font-semibold text-brand-800">ฟาร์มนี้ยังไม่มีอุปกรณ์ IoT</div>

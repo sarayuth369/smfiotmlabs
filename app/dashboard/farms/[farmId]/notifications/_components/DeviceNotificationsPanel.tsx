@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveLineConfig, saveSheetsConfig } from "../actions";
 import type { LineConfig, SheetsConfig } from "../actions";
+import { FeatureLockedNotice } from "@/app/dashboard/_components/FeatureLockedNotice";
 
 const LINE_DEFAULT_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
@@ -27,12 +28,18 @@ export function DeviceNotificationsPanel({
   deviceUid,
   initialLine,
   initialSheets,
+  planName,
+  planAllowsLine,
+  planAllowsSheets,
 }: {
   deviceId: string;
   deviceName: string;
   deviceUid: string;
   initialLine: LineConfig;
   initialSheets: SheetsConfig;
+  planName: string;
+  planAllowsLine: boolean;
+  planAllowsSheets: boolean;
 }) {
   const [line, setLine] = useState<LineConfig>(initialLine);
   const [sheets, setSheets] = useState<SheetsConfig>(initialSheets);
@@ -69,19 +76,24 @@ export function DeviceNotificationsPanel({
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-brand-900/70 uppercase tracking-wider">แจ้งเตือนผ่าน LINE</h3>
-          <div className="flex items-center gap-2">
-            {lineMsg && <span className="text-xs text-brand-900/60">{lineMsg}</span>}
-            <button
-              type="button"
-              onClick={doSaveLine}
-              disabled={pendingLine}
-              className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
-            >
-              {pendingLine ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
-            </button>
-          </div>
+          {planAllowsLine && (
+            <div className="flex items-center gap-2">
+              {lineMsg && <span className="text-xs text-brand-900/60">{lineMsg}</span>}
+              <button
+                type="button"
+                onClick={doSaveLine}
+                disabled={pendingLine}
+                className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
+              >
+                {pendingLine ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
+              </button>
+            </div>
+          )}
         </div>
 
+        {!planAllowsLine ? (
+          <FeatureLockedNotice planName={planName} featureLabel="แจ้งเตือนผ่าน LINE" compact />
+        ) : (
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm font-semibold text-brand-800">
             <input
@@ -182,25 +194,31 @@ export function DeviceNotificationsPanel({
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Google Sheets */}
       <div className="border-t border-border pt-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-brand-900/70 uppercase tracking-wider">บันทึกลง Google Sheet</h3>
-          <div className="flex items-center gap-2">
-            {sheetsMsg && <span className="text-xs text-brand-900/60">{sheetsMsg}</span>}
-            <button
-              type="button"
-              onClick={doSaveSheets}
-              disabled={pendingSheets}
-              className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
-            >
-              {pendingSheets ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
-            </button>
-          </div>
+          {planAllowsSheets && (
+            <div className="flex items-center gap-2">
+              {sheetsMsg && <span className="text-xs text-brand-900/60">{sheetsMsg}</span>}
+              <button
+                type="button"
+                onClick={doSaveSheets}
+                disabled={pendingSheets}
+                className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
+              >
+                {pendingSheets ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
+              </button>
+            </div>
+          )}
         </div>
 
+        {!planAllowsSheets ? (
+          <FeatureLockedNotice planName={planName} featureLabel="บันทึกลง Google Sheet" compact />
+        ) : (
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm font-semibold text-brand-800">
             <input
@@ -258,6 +276,7 @@ export function DeviceNotificationsPanel({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

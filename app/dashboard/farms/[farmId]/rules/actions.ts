@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { publishToDevice, getDeviceRetained } from "@/lib/device-mqtt";
+import { getUserPlan, hasFeature } from "@/lib/plan-limits";
 
 export type ScheduleEntry = { ch: number; en: boolean; on: number; off: number; days: number };
 export type RuleEntry = {
@@ -88,6 +89,11 @@ export async function saveSchedule(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "unauthenticated" };
 
+  const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "rules")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Rules` };
+  }
+
   const { device_uid, customer_uuid, farm_id } = await requireOwnedDevice(supabase, user.id, deviceId);
 
   const result = await publishToDevice(customer_uuid, device_uid, "config_schedule", schedules, {
@@ -106,6 +112,11 @@ export async function saveRules(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "unauthenticated" };
+
+  const plan = await getUserPlan(supabase, user.id);
+  if (!hasFeature(plan, "rules")) {
+    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Rules` };
+  }
 
   const { device_uid, customer_uuid, farm_id } = await requireOwnedDevice(supabase, user.id, deviceId);
 

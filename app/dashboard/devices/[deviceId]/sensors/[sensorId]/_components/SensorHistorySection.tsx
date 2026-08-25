@@ -19,13 +19,11 @@ export function SensorHistorySection({
   sensorId,
   unit,
   initialSummary,
-  planAllowsHistory,
 }: {
   deviceId: string;
   sensorId: string;
   unit: string;
   initialSummary: HistorySummary;
-  planAllowsHistory: boolean;
 }) {
   const [enabled, setEnabled] = useState(initialSummary.recordHistory);
   const [interval, setInterval_] = useState(initialSummary.intervalMinutes);
@@ -77,12 +75,7 @@ export function SensorHistorySection({
         <h2 className="font-bold text-brand-800">History</h2>
       </div>
 
-      {!planAllowsHistory ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          🔒 แพ็กเกจปัจจุบันไม่รองรับ Sensor History — อัปเกรดแพ็กเกจเพื่อเปิดใช้งาน
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
           <label className="flex items-center gap-2 text-sm font-semibold text-brand-800">
             <input
               type="checkbox"
@@ -123,7 +116,6 @@ export function SensorHistorySection({
             {initialSummary.retentionDays === null ? "ไม่จำกัด" : `${initialSummary.retentionDays} วัน`}
           </span>
         </div>
-      )}
 
       <div>
         <div className="flex items-center gap-2 mb-3">

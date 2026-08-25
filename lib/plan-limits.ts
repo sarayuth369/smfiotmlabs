@@ -33,10 +33,10 @@ const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: { sensor_history: true },
-  pro: { mqtt: true, line_notify: true, reports: true, sensor_history: true },
-  business: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true, sensor_history: true },
-  enterprise: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true, sensor_history: true },
+  starter: { reports: true, rules: true, sheets_export: true },
+  pro: { line_notify: true, reports: true, rules: true, sheets_export: true },
+  business: { line_notify: true, reports: true, ota: true, api: true, automation: true, rules: true, sheets_export: true },
+  enterprise: { line_notify: true, reports: true, ota: true, api: true, automation: true, rules: true, sheets_export: true },
 };
 
 const FALLBACK_META: Record<
@@ -108,15 +108,13 @@ export function hasFeature(plan: UserPlan, key: string): boolean {
 
 /** Well-known feature-flag keys — extend list to expose new toggles in admin UI. */
 export const KNOWN_FEATURES = [
-  { key: "mqtt", label: "MQTT" },
   { key: "line_notify", label: "LINE Notify" },
+  { key: "sheets_export", label: "บันทึกลง Google Sheet" },
   { key: "ota", label: "OTA Firmware" },
   { key: "api", label: "API Access" },
   { key: "reports", label: "Reports" },
   { key: "automation", label: "Automation" },
-  { key: "automation_advanced", label: "Advanced Automation (AND/OR + schedule)" },
-  { key: "sensor_history", label: "Sensor History Recording" },
-  { key: "safety_controls", label: "Safety Runtime Limits" },
+  { key: "rules", label: "Rules" },
   { key: "ai", label: "AI Analysis" },
   { key: "priority_support", label: "Priority Support" },
 ] as const;

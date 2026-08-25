@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getUserPlan, hasFeature } from "@/lib/plan-limits";
+import { getUserPlan } from "@/lib/plan-limits";
 
 async function requireOwnedFarm(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -317,7 +317,6 @@ export type ExportPeriodInfo = {
   /** Pre-validated day choices for the export period dropdown. */
   options: number[];
   retentionDays: number | null;
-  planAllowsHistory: boolean;
 };
 
 export async function getExportPeriodOptions(farmId: string): Promise<ExportPeriodInfo> {
@@ -325,18 +324,17 @@ export async function getExportPeriodOptions(farmId: string): Promise<ExportPeri
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { maxDays: 0, options: [], retentionDays: null, planAllowsHistory: false };
+  if (!user) return { maxDays: 0, options: [], retentionDays: null };
   await requireOwnedFarm(supabase, user.id, farmId);
 
   const plan = await getUserPlan(supabase, user.id);
-  const planAllowsHistory = hasFeature(plan, "sensor_history");
   const retentionDays = plan.limits.sensor_history_days;
   const maxDays = retentionDays === null ? EXPORT_HARD_CAP_DAYS : Math.min(retentionDays, EXPORT_HARD_CAP_DAYS);
 
   const candidates = [1, 3, 7, 14, 30].filter((d) => d <= maxDays);
   const options = [...new Set([...candidates, maxDays])].sort((a, b) => a - b);
 
-  return { maxDays, options, retentionDays, planAllowsHistory };
+  return { maxDays, options, retentionDays };
 }
 
 export type ExportResult = { ok: true; csv: string; filename: string } | { ok: false; error: string };
@@ -356,10 +354,6 @@ export async function exportSensorHistoryCsv(farmId: string, sensorId: string, d
   await requireOwnedFarm(supabase, user.id, farmId);
 
   const plan = await getUserPlan(supabase, user.id);
-  if (!hasFeature(plan, "sensor_history")) {
-    return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Sensor History` };
-  }
-
   const retentionDays = plan.limits.sensor_history_days;
   const maxDays = retentionDays === null ? EXPORT_HARD_CAP_DAYS : Math.min(retentionDays, EXPORT_HARD_CAP_DAYS);
   const requestedDays = Math.floor(days);

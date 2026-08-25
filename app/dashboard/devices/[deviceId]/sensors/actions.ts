@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateSensor, getUserPlan, hasFeature } from "@/lib/plan-limits";
+import { canCreateSensor } from "@/lib/plan-limits";
 import { isValidSensorType } from "@/lib/sensor-types";
 
 const HISTORY_INTERVALS = [5, 10, 15, 30, 60] as const;
@@ -205,13 +205,6 @@ export async function updateSensorHistoryAction(
 
   if (!(HISTORY_INTERVALS as readonly number[]).includes(intervalMinutes)) {
     return { ok: false, error: "interval ไม่ถูกต้อง" };
-  }
-
-  if (recordHistory) {
-    const plan = await getUserPlan(supabase, user.id);
-    if (!hasFeature(plan, "sensor_history")) {
-      return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Sensor History` };
-    }
   }
 
   const { error } = await supabase
