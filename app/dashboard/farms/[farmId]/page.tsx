@@ -89,7 +89,7 @@ export default async function FarmDetailPage({
     { key: "sensors", label: "Sensors", href: `/dashboard/farms/${farmId}/sensors` },
     { key: "controls", label: "Controls", href: `/dashboard/farms/${farmId}/controls` },
     { key: "rules", label: "Rules", href: `/dashboard/farms/${farmId}/rules` },
-    { key: "notifications", label: "การแจ้งเตือน", soon: true },
+    { key: "notifications", label: "การแจ้งเตือน", href: `/dashboard/farms/${farmId}/notifications` },
     { key: "reports", label: "รายงาน", soon: true },
   ];
 

@@ -16,7 +16,11 @@ export type DeviceMqttKind =
   | "config_rules"
   | "config_schedule_status"
   | "config_rules_status"
-  | "relay_event";
+  | "relay_event"
+  | "config_line"
+  | "config_sheets"
+  | "config_line_status"
+  | "config_sheets_status";
 
 type WebhookResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
