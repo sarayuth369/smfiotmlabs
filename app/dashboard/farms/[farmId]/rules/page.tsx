@@ -7,6 +7,7 @@ import { getDeviceScheduleAndRules } from "./actions";
 import { DeviceRulesPanel } from "./_components/DeviceRulesPanel";
 
 type DeviceRow = { id: string; device_uid: string; device_name: string };
+type RelayRow = { channel: number; name: string; device_id: string };
 
 export default async function FarmRulesPage({
   params,
@@ -37,6 +38,23 @@ export default async function FarmRulesPage({
     .is("archived_at", null)
     .order("device_name");
   const devices = (deviceRows ?? []) as DeviceRow[];
+  const deviceIds = devices.map((d) => d.id);
+
+  const { data: relayRows } = deviceIds.length
+    ? await supabase
+        .from("relays")
+        .select("channel, name, device_id")
+        .in("device_id", deviceIds)
+        .is("archived_at", null)
+        .order("channel")
+    : { data: [] };
+  const relays = (relayRows ?? []) as RelayRow[];
+  const relaysByDevice = new Map<string, RelayRow[]>();
+  for (const r of relays) {
+    const list = relaysByDevice.get(r.device_id) ?? [];
+    list.push(r);
+    relaysByDevice.set(r.device_id, list);
+  }
 
   const deviceData = planAllowsRules ? await Promise.all(devices.map((d) => getDeviceScheduleAndRules(d.id))) : [];
 
@@ -77,6 +95,8 @@ export default async function FarmRulesPage({
               deviceId={device.id}
               deviceName={device.device_name}
               deviceUid={device.device_uid}
+              farmId={farmId}
+              relays={relaysByDevice.get(device.id) ?? []}
               initialSchedules={deviceData[i].schedules}
               initialRules={deviceData[i].rules}
             />

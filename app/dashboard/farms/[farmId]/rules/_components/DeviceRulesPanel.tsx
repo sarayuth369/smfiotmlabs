@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveSchedule, saveRules } from "../actions";
 import type { ScheduleEntry, RuleEntry } from "../actions";
+
+type Relay = { channel: number; name: string };
 
 const DAY_LABELS = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"]; // index 0=Monday..6=Sunday, matches ScheduleModel
 
@@ -35,14 +38,14 @@ function timeToMinutes(t: string): number {
 function defaultSchedule(ch: number): ScheduleEntry {
   return { ch, en: false, on: 6 * 60, off: 18 * 60, days: 127 };
 }
-function blankRule(): RuleEntry {
+function blankRule(ch: number): RuleEntry {
   return {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     en: true,
     src: "ph",
     cmp: "lt",
     val: 6,
-    ch: 1,
+    ch,
     act: true,
     nl: false,
   };
@@ -52,18 +55,25 @@ export function DeviceRulesPanel({
   deviceId,
   deviceName,
   deviceUid,
+  farmId,
+  relays,
   initialSchedules,
   initialRules,
 }: {
   deviceId: string;
   deviceName: string;
   deviceUid: string;
+  farmId: string;
+  relays: Relay[];
   initialSchedules: ScheduleEntry[];
   initialRules: RuleEntry[];
 }) {
+  const relayChannels = relays.map((r) => r.channel);
+  const relayNameByChannel = new Map(relays.map((r) => [r.channel, r.name]));
+
   const [schedules, setSchedules] = useState<ScheduleEntry[]>(() => {
     const byCh = new Map(initialSchedules.map((s) => [s.ch, s]));
-    return [1, 2, 3, 4].map((ch) => byCh.get(ch) ?? defaultSchedule(ch));
+    return relayChannels.map((ch) => byCh.get(ch) ?? defaultSchedule(ch));
   });
   const [rules, setRules] = useState<RuleEntry[]>(initialRules);
 
@@ -93,7 +103,7 @@ export function DeviceRulesPanel({
     setRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function addRule() {
-    setRules((prev) => [...prev, blankRule()]);
+    setRules((prev) => [...prev, blankRule(relayChannels[0] ?? 1)]);
   }
   function removeRule(id: string) {
     setRules((prev) => prev.filter((r) => r.id !== id));
@@ -119,30 +129,40 @@ export function DeviceRulesPanel({
           <h3 className="text-sm font-bold text-brand-900/70 uppercase tracking-wider">
             ตั้งเวลาเปิด/ปิด Relay
           </h3>
-          <div className="flex items-center gap-2">
-            {scheduleMsg && <span className="text-xs text-brand-900/60">{scheduleMsg}</span>}
-            <button
-              type="button"
-              onClick={doSaveSchedule}
-              disabled={pendingSchedule}
-              className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
-            >
-              {pendingSchedule ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
-            </button>
-          </div>
+          {relayChannels.length > 0 && (
+            <div className="flex items-center gap-2">
+              {scheduleMsg && <span className="text-xs text-brand-900/60">{scheduleMsg}</span>}
+              <button
+                type="button"
+                onClick={doSaveSchedule}
+                disabled={pendingSchedule}
+                className="rounded-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-1.5 disabled:opacity-50"
+              >
+                {pendingSchedule ? "กำลังส่ง..." : "บันทึก + ส่งไปยัง ESP32"}
+              </button>
+            </div>
+          )}
         </div>
+        {relayChannels.length === 0 ? (
+          <p className="text-sm text-brand-900/50">
+            ยังไม่มี Relay ที่ถูกสร้างขึ้น —{" "}
+            <Link href={`/dashboard/farms/${farmId}/controls`} className="text-brand-700 hover:text-brand-900 underline">
+              ไปที่ Controls เพื่อเพิ่ม Relay
+            </Link>
+          </p>
+        ) : (
         <div className="space-y-3">
           {schedules.map((s) => (
             <div key={s.ch} className="rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-800 w-24 shrink-0">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-800 w-32 shrink-0">
                   <input
                     type="checkbox"
                     checked={s.en}
                     onChange={(e) => updateSchedule(s.ch, { en: e.target.checked })}
                     className="rounded border-border text-brand-600"
                   />
-                  Ch{s.ch}
+                  Ch{s.ch} · {relayNameByChannel.get(s.ch) ?? ""}
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-brand-900/70">
                   เปิด
@@ -182,6 +202,7 @@ export function DeviceRulesPanel({
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {/* Automation rules */}
@@ -195,7 +216,8 @@ export function DeviceRulesPanel({
             <button
               type="button"
               onClick={addRule}
-              className="rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3 py-1.5"
+              disabled={relayChannels.length === 0}
+              className="rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               + เพิ่มกฎ
             </button>
@@ -210,7 +232,14 @@ export function DeviceRulesPanel({
           </div>
         </div>
 
-        {rules.length === 0 ? (
+        {relayChannels.length === 0 ? (
+          <p className="text-sm text-brand-900/50">
+            ยังไม่มี Relay ที่ถูกสร้างขึ้น —{" "}
+            <Link href={`/dashboard/farms/${farmId}/controls`} className="text-brand-700 hover:text-brand-900 underline">
+              ไปที่ Controls เพื่อเพิ่ม Relay
+            </Link>
+          </p>
+        ) : rules.length === 0 ? (
           <p className="text-sm text-brand-900/50">ยังไม่มีกฎ</p>
         ) : (
           <div className="space-y-2">
@@ -254,9 +283,9 @@ export function DeviceRulesPanel({
                   onChange={(e) => updateRule(r.id, { ch: Number(e.target.value) })}
                   className="rounded border border-border px-1.5 py-1 text-xs"
                 >
-                  {[1, 2, 3, 4].map((c) => (
+                  {relayChannels.map((c) => (
                     <option key={c} value={c}>
-                      {c}
+                      Ch{c} · {relayNameByChannel.get(c) ?? ""}
                     </option>
                   ))}
                 </select>
