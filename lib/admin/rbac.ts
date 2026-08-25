@@ -18,20 +18,21 @@ export type Module =
   | "content"
   | "settings"
   | "admin_users"
-  | "logs";
+  | "logs"
+  | "mqtt";
 
 const MATRIX: Record<AdminRole, Module[]> = {
   super_admin: [
     "dashboard","members","farms","devices","firmware","subscriptions","pricing","plan_limits","products","orders","plan_orders",
-    "payments","income","notifications","content","settings","admin_users","logs",
+    "payments","income","notifications","content","settings","admin_users","logs","mqtt",
   ],
   admin: [
     "dashboard","members","farms","devices","firmware","subscriptions","pricing","plan_limits","products","orders","plan_orders",
-    "payments","income","notifications","logs",
+    "payments","income","notifications","logs","mqtt",
   ],
   support: ["dashboard","members","farms","subscriptions","payments","notifications","orders","plan_orders"],
   sales: ["dashboard","members","subscriptions","products","orders","plan_orders","payments","income"],
-  technician: ["dashboard","farms","devices","products","logs"],
+  technician: ["dashboard","farms","devices","products","logs","mqtt"],
   content: ["dashboard","notifications","content"],
 };
 
