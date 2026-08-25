@@ -291,9 +291,9 @@ function cleanText(v: string | null | undefined): string {
   return (v ?? "").replace(/[\r\n]+/g, " ").trim();
 }
 
-/** RFC4180 quoting — wraps in quotes only when the field needs it. */
+/** RFC4180-style quoting — wraps in quotes only when the field needs it (delimiter is TAB, see below). */
 function csvQuote(s: string): string {
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /["\t\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 /**
@@ -444,11 +444,18 @@ export async function exportSensorHistoryCsv(farmId: string, sensorId: string, d
   // Per-row columns intentionally kept minimal — customer/farm/zone/node/
   // sensor/type/unit are already stated once in the metadata block above,
   // so repeating them on every row is pure noise.
-  lines.push(["Report Date", "Recorded At", "Value"].join(","));
+  //
+  // TAB-delimited, not comma: when Excel opens a Unicode text file directly
+  // (which is how the UTF-16LE download below gets opened), it splits
+  // columns using the Windows "list separator" regional setting, not a
+  // literal comma — on many locales that isn't a comma, so a comma-joined
+  // file lands entirely in column A. Tab is what Excel's plain-text-open
+  // path always splits on regardless of region.
+  lines.push(["Report Date", "Recorded At", "Value"].join("\t"));
 
   for (const r of rows) {
     const occurredAt = r.occurred_at as string;
-    lines.push([csvPlain(fmtDate(occurredAt)), csvPlain(fmtDateTime(occurredAt)), csvPlain(Number(r.value))].join(","));
+    lines.push([csvPlain(fmtDate(occurredAt)), csvPlain(fmtDateTime(occurredAt)), csvPlain(Number(r.value))].join("\t"));
   }
 
   // Plain UTF-8 text, no BOM here — non-Microsoft-365 Excel builds ignore a
