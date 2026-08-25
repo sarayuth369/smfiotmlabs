@@ -27,6 +27,7 @@ export async function updatePlanLimits(planId: string, formData: FormData): Prom
   const max_zones = parseLimit(formData, "max_zones", 0);
   const max_nodes = parseLimit(formData, "max_nodes", 0);
   const max_sensors = parseLimit(formData, "max_sensors", 0);
+  const max_relays = parseLimit(formData, "max_relays", 0);
   const sensor_history_days = parseLimit(formData, "sensor_history_days", 1);
 
   const entitlements: Record<string, boolean> = {};
@@ -42,6 +43,7 @@ export async function updatePlanLimits(planId: string, formData: FormData): Prom
       max_zones,
       max_nodes,
       max_sensors,
+      max_relays,
       sensor_history_days,
       entitlements,
       updated_at: new Date().toISOString(),

@@ -8,6 +8,7 @@ export type PlanLimits = {
   max_zones: number | null;
   max_nodes: number | null;
   max_sensors: number | null;
+  max_relays: number | null;
   sensor_history_days: number | null;
 };
 
@@ -25,10 +26,10 @@ export type UserPlan = {
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, sensor_history_days: 7 },
-  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, sensor_history_days: 90 },
-  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, sensor_history_days: 365 },
-  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, sensor_history_days: null },
+  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7 },
+  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90 },
+  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365 },
+  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null },
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
@@ -66,7 +67,7 @@ export async function getUserPlan(
 
   const { data: row } = await supabase
     .from("subscription_plans")
-    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, sensor_history_days, entitlements")
+    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, entitlements")
     .eq("plan_id", planId)
     .maybeSingle();
 
@@ -92,6 +93,7 @@ export async function getUserPlan(
       max_zones: row ? (row.max_zones as number | null) : fb.max_zones,
       max_nodes: row ? (row.max_nodes as number | null) : fb.max_nodes,
       max_sensors: row ? (row.max_sensors as number | null) : fb.max_sensors,
+      max_relays: row ? (row.max_relays as number | null) : fb.max_relays,
       sensor_history_days: row
         ? (row.sensor_history_days as number | null)
         : fb.sensor_history_days,
@@ -301,6 +303,64 @@ export async function canCreateSensor(
       planId: plan.plan_id,
       planName: plan.name,
       reason: `คุณใช้จำนวน Sensor ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
+    };
+  }
+  return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
+}
+
+/** Counts ACTIVE relay controls across ALL ACTIVE devices in ALL farms of
+ *  a user. This governs how many named relay-control entries the account
+ *  may configure across its fleet — independent of the fixed 4 physical
+ *  channels per ESP32-S3 relay board (relay_model.dart is the single
+ *  source of truth for that hardware constant). A Business/Enterprise
+ *  account with several devices needs more total relay slots than a
+ *  Starter account with one device, exactly like max_sensors already
+ *  works relative to per-device sensor wiring. */
+export async function getRelayUsage(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data: farmIdsRow } = await supabase
+    .from("farms")
+    .select("id")
+    .eq("user_id", userId);
+  const farmIds = (farmIdsRow ?? []).map((f) => f.id as string);
+  if (farmIds.length === 0) return 0;
+  const { data: nodeIdsRow } = await supabase
+    .from("iot_nodes")
+    .select("id")
+    .in("farm_id", farmIds)
+    .is("archived_at", null);
+  const nodeIds = (nodeIdsRow ?? []).map((n) => n.id as string);
+  if (nodeIds.length === 0) return 0;
+  const { count } = await supabase
+    .from("relays")
+    .select("id", { count: "exact", head: true })
+    .in("device_id", nodeIds)
+    .is("archived_at", null);
+  return count ?? 0;
+}
+
+export async function canCreateRelay(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<LimitCheck> {
+  const [plan, current] = await Promise.all([
+    getUserPlan(supabase, userId),
+    getRelayUsage(supabase, userId),
+  ]);
+  const limit = plan.limits.max_relays;
+  if (limit === null) {
+    return { ok: true, current, limit: null, planId: plan.plan_id, planName: plan.name };
+  }
+  if (current >= limit) {
+    return {
+      ok: false,
+      current,
+      limit,
+      planId: plan.plan_id,
+      planName: plan.name,
+      reason: `คุณใช้จำนวน Relay ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
     };
   }
   return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };

@@ -13,6 +13,7 @@ type PlanRow = {
   max_zones: number | null;
   max_nodes: number | null;
   max_sensors: number | null;
+  max_relays: number | null;
   sensor_history_days: number | null;
   entitlements: Record<string, boolean> | null;
   sort_order: number;
@@ -27,7 +28,7 @@ export default async function PlanLimitsPage() {
 
   const { data } = await admin
     .from("subscription_plans")
-    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, sensor_history_days, entitlements, sort_order, is_active")
+    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, entitlements, sort_order, is_active")
     .in("plan_id", PLAN_ORDER as unknown as string[]);
 
   const rows = (data ?? []) as PlanRow[];
@@ -80,6 +81,7 @@ export default async function PlanLimitsPage() {
                   <LimitInput name="max_zones" label="Max Zones" initial={p.max_zones} />
                   <LimitInput name="max_nodes" label="Max IoT Devices" initial={p.max_nodes} />
                   <LimitInput name="max_sensors" label="Max Sensors" initial={p.max_sensors} />
+                  <LimitInput name="max_relays" label="Max Relays" initial={p.max_relays} />
                 </div>
                 <div className="mt-4">
                   <LimitInput
