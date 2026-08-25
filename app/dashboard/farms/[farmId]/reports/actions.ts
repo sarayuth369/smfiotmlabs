@@ -297,19 +297,12 @@ function csvQuote(s: string): string {
 }
 
 /**
- * Data-grid cell for free-text, user-editable values (farm/zone/node/sensor
- * name, unit, customer name). These sit at the START of their CSV field, so
- * a value beginning with = + - @ could execute as a formula in Excel/Sheets
- * when the file is opened — prefix with a literal quote char to neutralize
- * that per OWASP CSV-injection guidance, then apply normal RFC4180 quoting.
+ * Every metadata header line ("Farm: xxx") and every per-row column
+ * (Report Date / Recorded At / Value) is either fixed literal text or a
+ * server-controlled value (date, number) — none of them put raw
+ * user-editable text at the START of a CSV field, so nothing here can be
+ * interpreted as a spreadsheet formula. No injection-prefix guard needed.
  */
-function csvUserText(v: string | null | undefined): string {
-  let s = cleanText(v);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return csvQuote(s);
-}
-
-/** Data-grid cell for server-controlled values (dates, UIDs, enums, numbers) — no injection risk, just quoting. */
 function csvPlain(v: string | number | null | undefined): string {
   return csvQuote(v === null || v === undefined ? "" : String(v));
 }
@@ -441,37 +434,27 @@ export async function exportSensorHistoryCsv(farmId: string, sensorId: string, d
   lines.push(csvPlain(`Timezone: ${TZ}`));
   lines.push(csvPlain(`Customer: ${cleanText(customerName)}`));
   lines.push(csvPlain(`Farm: ${cleanText(farm.name)}`));
+  if (zone?.name) lines.push(csvPlain(`Zone: ${cleanText(zone.name)}`));
   lines.push(csvPlain(`Node Name: ${cleanText(node.device_name)}`));
   lines.push(csvPlain(`Device UID: ${node.device_uid}`));
   lines.push(csvPlain(`Sensor: ${cleanText(raw.name)}${raw.unit ? ` (${cleanText(raw.unit)})` : ""}`));
+  lines.push(csvPlain(`Sensor Type: ${raw.sensor_type}`));
   lines.push(""); // blank separator row before the data table
 
-  lines.push(
-    ["Report Date", "Customer", "Farm", "Zone", "Node Name", "Device UID", "Sensor", "Sensor Type", "Unit", "Recorded At", "Value"].join(
-      ","
-    )
-  );
+  // Per-row columns intentionally kept minimal — customer/farm/zone/node/
+  // sensor/type/unit are already stated once in the metadata block above,
+  // so repeating them on every row is pure noise.
+  lines.push(["Report Date", "Recorded At", "Value"].join(","));
 
   for (const r of rows) {
     const occurredAt = r.occurred_at as string;
-    lines.push(
-      [
-        csvPlain(fmtDate(occurredAt)),
-        csvUserText(customerName),
-        csvUserText(farm.name),
-        csvUserText(zone?.name ?? ""),
-        csvUserText(node.device_name),
-        csvPlain(node.device_uid),
-        csvUserText(raw.name),
-        csvPlain(raw.sensor_type),
-        csvUserText(raw.unit ?? ""),
-        csvPlain(fmtDateTime(occurredAt)),
-        csvPlain(Number(r.value)),
-      ].join(",")
-    );
+    lines.push([csvPlain(fmtDate(occurredAt)), csvPlain(fmtDateTime(occurredAt)), csvPlain(Number(r.value))].join(","));
   }
 
-  const csv = lines.join("\r\n");
+  // Leading UTF-8 BOM — without it, Excel on Windows guesses the file's
+  // codepage instead of reading it as UTF-8 and renders Thai text as
+  // mojibake. Google Sheets/LibreOffice/text editors ignore the BOM fine.
+  const csv = "﻿" + lines.join("\r\n");
   const filename = `SMF_Report_${safeFilenamePart(node.device_uid)}_${safeFilenamePart(raw.name)}_${fmtDate(nowIso)}.csv`;
 
   return { ok: true, csv, filename };
