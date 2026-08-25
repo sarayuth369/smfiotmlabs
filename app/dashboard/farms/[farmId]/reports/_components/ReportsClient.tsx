@@ -16,6 +16,27 @@ import {
 import { SvgLineChart } from "@/app/dashboard/_components/SvgLineChart";
 import { SvgBarChart } from "@/app/dashboard/_components/SvgBarChart";
 
+/**
+ * Encodes as UTF-16LE with a leading BOM instead of UTF-8. Non-Microsoft-365
+ * Excel builds ignore a UTF-8 BOM specifically on .csv files and fall back
+ * to the system ANSI codepage (cp874 on Thai Windows), turning Thai text
+ * into mojibake — Excel has always correctly auto-detected UTF-16 BOM
+ * regardless of version or file extension, so this is the reliable choice.
+ * JS strings are already UTF-16 code units, so this is a direct byte copy.
+ */
+function toUtf16LeWithBom(text: string): Uint8Array<ArrayBuffer> {
+  const buffer = new ArrayBuffer(2 + text.length * 2);
+  const bytes = new Uint8Array(buffer);
+  bytes[0] = 0xff;
+  bytes[1] = 0xfe;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    bytes[2 + i * 2] = code & 0xff;
+    bytes[2 + i * 2 + 1] = code >> 8;
+  }
+  return bytes;
+}
+
 const PERIODS: { key: "1h" | "6h" | "24h" | "7d"; label: string }[] = [
   { key: "1h", label: "1 ชั่วโมง" },
   { key: "6h", label: "6 ชั่วโมง" },
@@ -76,7 +97,7 @@ export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: Re
       setExportError(res.error);
       return;
     }
-    const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([toUtf16LeWithBom(res.csv)], { type: "text/csv;charset=utf-16le;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

@@ -451,10 +451,12 @@ export async function exportSensorHistoryCsv(farmId: string, sensorId: string, d
     lines.push([csvPlain(fmtDate(occurredAt)), csvPlain(fmtDateTime(occurredAt)), csvPlain(Number(r.value))].join(","));
   }
 
-  // Leading UTF-8 BOM — without it, Excel on Windows guesses the file's
-  // codepage instead of reading it as UTF-8 and renders Thai text as
-  // mojibake. Google Sheets/LibreOffice/text editors ignore the BOM fine.
-  const csv = "﻿" + lines.join("\r\n");
+  // Plain UTF-8 text, no BOM here — non-Microsoft-365 Excel builds ignore a
+  // UTF-8 BOM specifically for .csv (unlike .txt) and fall back to the
+  // system ANSI codepage, mangling Thai text. The client encodes this as
+  // UTF-16LE with a BOM instead, which every Excel version has always
+  // auto-detected correctly regardless of file extension.
+  const csv = lines.join("\r\n");
   const filename = `SMF_Report_${safeFilenamePart(node.device_uid)}_${safeFilenamePart(raw.name)}_${fmtDate(nowIso)}.csv`;
 
   return { ok: true, csv, filename };
