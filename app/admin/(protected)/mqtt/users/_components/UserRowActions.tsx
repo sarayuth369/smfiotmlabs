@@ -7,6 +7,8 @@ import {
   deleteUserAction,
   rotatePasswordAction,
 } from "../actions";
+import { AdminInstallFlasher } from "./AdminInstallFlasher";
+import type { ProvisionFirmwareBundle } from "@/app/dashboard/devices/actions";
 
 export function UserRowActions({
   username,
@@ -21,6 +23,7 @@ export function UserRowActions({
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotateCustUuid, setRotateCustUuid] = useState("");
   const [rotatedPw, setRotatedPw] = useState<string | null>(null);
+  const [rotatedFirmware, setRotatedFirmware] = useState<ProvisionFirmwareBundle | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   function doToggle() {
@@ -47,8 +50,10 @@ export function UserRowActions({
     setErr(null);
     startTransition(async () => {
       const r = await rotatePasswordAction(username, rotateCustUuid.trim());
-      if (r.ok) setRotatedPw(r.password);
-      else setErr(r.error);
+      if (r.ok) {
+        setRotatedPw(r.password);
+        setRotatedFirmware(r.firmware);
+      } else setErr(r.error);
     });
   }
 
@@ -92,11 +97,23 @@ export function UserRowActions({
               <code className="block font-mono text-xs bg-white border border-amber-200 rounded px-2 py-1.5 break-all">
                 {rotatedPw}
               </code>
+              {rotatedFirmware?.available ? (
+                <AdminInstallFlasher
+                  deviceUid={username}
+                  releaseVersion={rotatedFirmware.release_version}
+                  artifacts={rotatedFirmware.artifacts}
+                />
+              ) : (
+                rotatedFirmware && (
+                  <div className="text-[11px] text-amber-800">⚠ Flash ไม่ได้: {rotatedFirmware.reason}</div>
+                )
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setRotateOpen(false);
                   setRotatedPw(null);
+                  setRotatedFirmware(null);
                 }}
                 className="text-[11px] rounded-full border border-border px-3 py-1 font-medium text-brand-800"
               >

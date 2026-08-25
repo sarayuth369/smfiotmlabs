@@ -3,6 +3,7 @@ import { listMqttUsers } from "@/lib/admin/mqtt-webhook";
 import { MqttSubnav } from "../_components/MqttSubnav";
 import { CreateUserForm } from "./_components/CreateUserForm";
 import { UserRowActions } from "./_components/UserRowActions";
+import { UsernameCell } from "./_components/UsernameCell";
 
 // Non-device service accounts (bridges, dashboard admin) don't match the
 // SMF-XXXXXX pattern so the webhook already refuses to disable/delete
@@ -81,7 +82,9 @@ export default async function MqttUsersPage({
             )}
             {users.map((u) => (
               <tr key={u.username} className="border-t border-border align-middle">
-                <td className="px-4 py-3 font-mono text-xs">{u.username}</td>
+                <td className="px-4 py-3">
+                  <UsernameCell username={u.username} />
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${

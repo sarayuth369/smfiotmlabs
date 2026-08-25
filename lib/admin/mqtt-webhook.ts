@@ -84,8 +84,23 @@ export function isValidMqttUsername(username: string): boolean {
   return DEVICE_UID_RE.test(username);
 }
 
+export type MqttAclRule = { action: string; topic: string; permission: string };
+export type MqttUserDetail = {
+  username: string;
+  enabled: boolean;
+  acl_rules: MqttAclRule[];
+  sessions: { clientid: string; ip_address: string | null; connected_at: string | null; proto_name: string | null }[];
+};
+
 export async function listMqttUsers(): Promise<WebhookResult<{ users: MqttUser[] }>> {
   return callWebhook("list-users");
+}
+
+export async function getMqttUserDetail(
+  username: string
+): Promise<WebhookResult<MqttUserDetail>> {
+  if (!isValidMqttUsername(username)) return { ok: false, error: "invalid username format" };
+  return callWebhook("get-user-detail", { username });
 }
 
 export async function listMqttClients(): Promise<WebhookResult<{ clients: MqttClient[] }>> {

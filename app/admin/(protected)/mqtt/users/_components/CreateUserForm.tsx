@@ -2,12 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { createMqttUser } from "../actions";
+import { AdminInstallFlasher } from "./AdminInstallFlasher";
+import type { ProvisionFirmwareBundle } from "@/app/dashboard/devices/actions";
 
 export function CreateUserForm() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ username: string; password: string; acl_rules: number } | null>(null);
+  const [result, setResult] = useState<{
+    username: string;
+    password: string;
+    acl_rules: number;
+    firmware: ProvisionFirmwareBundle;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
 
   function submit(formData: FormData) {
@@ -73,6 +80,17 @@ export function CreateUserForm() {
             </div>
           </div>
         </div>
+        {result.firmware.available ? (
+          <AdminInstallFlasher
+            deviceUid={result.username}
+            releaseVersion={result.firmware.release_version}
+            artifacts={result.firmware.artifacts}
+          />
+        ) : (
+          <div className="rounded-lg border border-amber-300 bg-white p-3 text-xs text-amber-900">
+            ⚠ Flash ผ่านหน้านี้ไม่ได้: {result.firmware.reason}
+          </div>
+        )}
         <button
           type="button"
           onClick={reset}
