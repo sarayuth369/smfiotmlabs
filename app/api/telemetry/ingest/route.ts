@@ -222,9 +222,12 @@ export async function POST(req: Request) {
   }
 
   // Resolve sensor identity per (sensor_type, channel) → sensors.id (active only)
+  // Phase 6.9b: record_history + history_interval_minutes gate whether a
+  // reading also gets a durable row in sensor_readings (see below) — the
+  // realtime path (sensor_readings_latest) never depends on this flag.
   const { data: sensorRows } = await admin
     .from("sensors")
-    .select("id, sensor_type, channel")
+    .select("id, sensor_type, channel, record_history, history_interval_minutes")
     .eq("device_id", device.id)
     .is("archived_at", null);
   const sensors = sensorRows ?? [];
@@ -262,22 +265,114 @@ export async function POST(req: Request) {
     });
   }
 
-  let inserted = 0;
+  // Phase 6.9b: realtime "current value" ALWAYS updates, regardless of the
+  // history opt-in. sensor_readings_latest used to be kept fresh only as a
+  // side effect of the sync_sensor_readings_latest AFTER-INSERT trigger on
+  // sensor_readings — which meant realtime display would have silently
+  // broken the moment we stopped inserting every reading into history.
+  // Upserting it here directly decouples the two, matching the trigger's
+  // own upsert shape (on conflict (sensor_id)).
   if (rows.length > 0) {
+    const { error: latestErr } = await admin.from("sensor_readings_latest").upsert(
+      rows.map((r) => ({
+        sensor_id: r.sensor_id,
+        device_id: r.device_id,
+        value: r.value,
+        unit: r.unit,
+        occurred_at: r.occurred_at,
+        received_at: new Date().toISOString(),
+      })),
+      { onConflict: "sensor_id" }
+    );
+    if (latestErr) {
+      console.warn("[telemetry.ingest] sensor_readings_latest upsert failed", latestErr.message);
+    }
+  }
+
+  // Phase 6.9b: durable history is OPT-IN per sensor + sampled at the
+  // sensor's configured interval — NOT one row per telemetry message.
+  // Only sensors with record_history=true are even considered; for those,
+  // an entitlement check (plan must allow "sensor_history") runs ONCE per
+  // request (not per reading), and a per-sensor "last sample" lookup
+  // (indexed via sensor_readings_sensor_occurred_idx) enforces the
+  // interval before a new row is written.
+  const historyEligibleSensorIds = [
+    ...new Set(
+      rows
+        .map((r) => sensors.find((s) => s.id === r.sensor_id))
+        .filter((s): s is NonNullable<typeof s> => !!s && s.record_history === true)
+        .map((s) => s.id as string)
+    ),
+  ];
+
+  let historyRows: Row[] = [];
+  if (historyEligibleSensorIds.length > 0) {
+    let planAllowsHistory = false;
+    const { data: farm } = await admin
+      .from("farms")
+      .select("user_id")
+      .eq("id", device.farm_id as string)
+      .maybeSingle();
+    if (farm?.user_id) {
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("plan")
+        .eq("id", farm.user_id as string)
+        .maybeSingle();
+      const { data: planRow } = await admin
+        .from("subscription_plans")
+        .select("entitlements")
+        .eq("plan_id", (profile?.plan as string) ?? "starter")
+        .maybeSingle();
+      const ent = planRow?.entitlements as Record<string, unknown> | null;
+      planAllowsHistory = !!ent?.sensor_history;
+    }
+
+    if (planAllowsHistory) {
+      const nowMs = Date.now();
+      const lastSampleAt = new Map<string, number>();
+      await Promise.all(
+        historyEligibleSensorIds.map(async (sid) => {
+          const { data: last } = await admin
+            .from("sensor_readings")
+            .select("occurred_at")
+            .eq("sensor_id", sid)
+            .order("occurred_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (last?.occurred_at) {
+            lastSampleAt.set(sid, new Date(last.occurred_at as string).getTime());
+          }
+        })
+      );
+
+      historyRows = rows.filter((r) => {
+        const sensor = sensors.find((s) => s.id === r.sensor_id);
+        if (!sensor?.record_history) return false;
+        const last = lastSampleAt.get(r.sensor_id);
+        if (last === undefined) return true; // first-ever sample — always record
+        const intervalMs = (sensor.history_interval_minutes as number) * 60_000;
+        return nowMs - last >= intervalMs;
+      });
+    }
+  }
+
+  let inserted = 0;
+  if (historyRows.length > 0) {
     // Plain insert. PostgREST upsert with partial unique index (WHERE message_id IS NOT NULL)
     // fails with "no unique or exclusion constraint matching ON CONFLICT" — bridge already
     // generates fresh message_id per POST so duplicates are not expected in practice.
     // If duplicates from broker retries do occur, catch 23505 unique-violation and ignore.
     const { error: insErr, count } = await admin
       .from("sensor_readings")
-      .insert(rows, { count: "exact" });
+      .insert(historyRows, { count: "exact" });
     if (insErr) {
       // 23505 = unique constraint violation (message_id collision) — safe to ignore
       if (insErr.code !== "23505") {
         return json({ ok: false, error: "insert failed", detail: insErr.message }, 500);
       }
     }
-    inserted = count ?? rows.length;
+    inserted = count ?? historyRows.length;
   }
 
   // Update device last_seen + status='online' + fire connected event if was offline

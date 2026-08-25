@@ -1,0 +1,154 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  getSensorSummary,
+  getSensorTrend,
+  getDailySummary,
+  type ReportSensorOption,
+  type SensorSummary,
+  type TrendPoint,
+  type DailyBar,
+} from "../actions";
+import { SvgLineChart } from "@/app/dashboard/_components/SvgLineChart";
+import { SvgBarChart } from "@/app/dashboard/_components/SvgBarChart";
+
+const PERIODS: { key: "1h" | "6h" | "24h" | "7d"; label: string }[] = [
+  { key: "1h", label: "1 ชั่วโมง" },
+  { key: "6h", label: "6 ชั่วโมง" },
+  { key: "24h", label: "24 ชั่วโมง" },
+  { key: "7d", label: "7 วัน" },
+];
+
+export function ReportsClient({ farmId, sensors }: { farmId: string; sensors: ReportSensorOption[] }) {
+  const [sensorId, setSensorId] = useState(sensors[0]?.id ?? "");
+  const [period, setPeriod] = useState<"1h" | "6h" | "24h" | "7d">("24h");
+  const [summary, setSummary] = useState<SensorSummary | null>(null);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [daily, setDaily] = useState<DailyBar[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sensorId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      getSensorSummary(farmId, sensorId, period),
+      getSensorTrend(farmId, sensorId, period),
+      getDailySummary(farmId, sensorId),
+    ]).then(([s, t, d]) => {
+      if (cancelled) return;
+      setSummary(s);
+      setTrend(t);
+      setDaily(d);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [farmId, sensorId, period]);
+
+  if (sensors.length === 0) {
+    return (
+      <div className="card p-10 text-center">
+        <div className="text-4xl">📊</div>
+        <div className="mt-3 font-semibold text-brand-800">ยังไม่มี Sensor ในฟาร์มนี้</div>
+        <p className="mt-1 text-sm text-brand-900/60">เพิ่ม Sensor ให้อุปกรณ์ก่อน จึงจะดูรายงานได้</p>
+      </div>
+    );
+  }
+
+  const unit = summary?.unit ?? sensors.find((s) => s.id === sensorId)?.unit ?? "";
+
+  return (
+    <div className="space-y-5">
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-brand-900/60">Sensor:</span>
+            <select
+              value={sensorId}
+              onChange={(e) => setSensorId(e.target.value)}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-brand-800"
+            >
+              {sensors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.deviceName} — {s.name} {s.unit ? `(${s.unit})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPeriod(p.key)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${
+                  period === p.key
+                    ? "bg-brand-600 text-white"
+                    : "border border-border text-brand-800 hover:border-brand-400"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-6">
+        <h2 className="font-bold text-brand-800 mb-3">สรุปค่า Sensor</h2>
+        {loading ? (
+          <div className="h-16 flex items-center justify-center text-sm text-brand-900/40">กำลังโหลด...</div>
+        ) : summary && summary.samples > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+            <Stat label="ปัจจุบัน" value={summary.current} unit={unit} highlight />
+            <Stat label="ต่ำสุด" value={summary.min} unit={unit} />
+            <Stat label="สูงสุด" value={summary.max} unit={unit} />
+            <Stat label="เฉลี่ย" value={summary.avg} unit={unit} />
+            <Stat label="จำนวนตัวอย่าง" value={summary.samples} unit="" />
+          </div>
+        ) : (
+          <p className="text-sm text-brand-900/50">
+            ไม่มีข้อมูลประวัติในช่วงเวลานี้ — เปิด &quot;บันทึกประวัติ Sensor&quot; ที่หน้า Sensor ก่อน
+          </p>
+        )}
+      </div>
+
+      <div className="card p-6">
+        <h2 className="font-bold text-brand-800 mb-3">แนวโน้ม (Trend)</h2>
+        {loading ? (
+          <div className="h-[180px] flex items-center justify-center text-sm text-brand-900/40">กำลังโหลด...</div>
+        ) : (
+          <SvgLineChart points={trend} unit={unit} />
+        )}
+      </div>
+
+      <div className="card p-6">
+        <h2 className="font-bold text-brand-800 mb-3">สรุปรายวัน (7 วันล่าสุด)</h2>
+        {loading ? (
+          <div className="h-[180px] flex items-center justify-center text-sm text-brand-900/40">กำลังโหลด...</div>
+        ) : (
+          <SvgBarChart data={daily} unit={unit} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, unit, highlight }: { label: string; value: number | null; unit: string; highlight?: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] text-brand-900/50 uppercase tracking-wider">{label}</div>
+      <div className={`text-lg font-bold ${highlight ? "text-brand-600" : "text-brand-800"}`}>
+        {value === null ? "-" : value.toFixed(unit ? 1 : 0)}
+        {unit && <span className="text-xs font-normal text-brand-900/50"> {unit}</span>}
+      </div>
+    </div>
+  );
+}

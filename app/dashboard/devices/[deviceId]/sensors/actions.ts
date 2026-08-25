@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateSensor } from "@/lib/plan-limits";
+import { canCreateSensor, getUserPlan, hasFeature } from "@/lib/plan-limits";
 import { isValidSensorType } from "@/lib/sensor-types";
+
+const HISTORY_INTERVALS = [5, 10, 15, 30, 60] as const;
 
 const STATUSES = ["active", "inactive"] as const;
 type Status = (typeof STATUSES)[number];
@@ -177,4 +179,48 @@ export async function deleteSensor(deviceId: string, sensorId: string): Promise<
   revalidatePath("/dashboard");
   revalidatePath(`/dashboard/devices/${deviceId}`);
   redirect(`/dashboard/devices/${deviceId}`);
+}
+
+/**
+ * Phase 6.9b — toggle opt-in sensor history recording + interval.
+ * Server-side re-checks the plan's "sensor_history" entitlement even
+ * though the UI already hides/disables the control for plans without
+ * it — the ingest route enforces this too (defense in depth), but a
+ * user should never even be able to persist record_history=true if
+ * their plan doesn't allow it.
+ */
+export async function updateSensorHistoryAction(
+  deviceId: string,
+  sensorId: string,
+  recordHistory: boolean,
+  intervalMinutes: number
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+
+  await requireOwnedDevice(supabase, user.id, deviceId);
+
+  if (!(HISTORY_INTERVALS as readonly number[]).includes(intervalMinutes)) {
+    return { ok: false, error: "interval ไม่ถูกต้อง" };
+  }
+
+  if (recordHistory) {
+    const plan = await getUserPlan(supabase, user.id);
+    if (!hasFeature(plan, "sensor_history")) {
+      return { ok: false, error: `แพ็กเกจ ${plan.name} ไม่รองรับ Sensor History` };
+    }
+  }
+
+  const { error } = await supabase
+    .from("sensors")
+    .update({ record_history: recordHistory, history_interval_minutes: intervalMinutes })
+    .eq("id", sensorId)
+    .eq("device_id", deviceId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/devices/${deviceId}/sensors/${sensorId}`);
+  return { ok: true };
 }

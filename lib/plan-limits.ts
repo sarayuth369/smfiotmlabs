@@ -33,10 +33,10 @@ const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: {},
-  pro: { mqtt: true, line_notify: true, reports: true },
-  business: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true },
-  enterprise: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true },
+  starter: { sensor_history: true },
+  pro: { mqtt: true, line_notify: true, reports: true, sensor_history: true },
+  business: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true, sensor_history: true },
+  enterprise: { mqtt: true, line_notify: true, reports: true, ota: true, api: true, automation: true, sensor_history: true },
 };
 
 const FALLBACK_META: Record<
@@ -115,6 +115,7 @@ export const KNOWN_FEATURES = [
   { key: "reports", label: "Reports" },
   { key: "automation", label: "Automation" },
   { key: "automation_advanced", label: "Advanced Automation (AND/OR + schedule)" },
+  { key: "sensor_history", label: "Sensor History Recording" },
   { key: "safety_controls", label: "Safety Runtime Limits" },
   { key: "ai", label: "AI Analysis" },
   { key: "priority_support", label: "Priority Support" },
