@@ -54,6 +54,12 @@ export default async function FarmControlsPage({
   const relayLimitLabel = formatLimit(userPlan.limits.max_relays);
   const relayPct = usagePercent(relayUsage, userPlan.limits.max_relays);
   const atRelayLimit = userPlan.limits.max_relays !== null && relayUsage >= userPlan.limits.max_relays;
+  // Channel numbers available per device are capped by the plan's relay
+  // quota too — a Starter (max_relays=2) account never sees Channel 3/4 as
+  // an option, even on a brand-new device, even though the hardware
+  // physically supports 4. Hardware ceiling (4) wins when the plan is
+  // unlimited (max_relays null).
+  const maxChannel = userPlan.limits.max_relays === null ? 4 : Math.min(4, userPlan.limits.max_relays);
 
   // Best-effort: read each relay's last-reported actual state in parallel.
   // A device that's offline or has never toggled a channel just shows
@@ -132,7 +138,8 @@ export default async function FarmControlsPage({
                   <AddRelayButton
                     deviceId={device.id}
                     usedChannels={usedChannels}
-                    disabled={atRelayLimit || usedChannels.length >= 4}
+                    maxChannel={maxChannel}
+                    disabled={atRelayLimit || usedChannels.length >= maxChannel}
                   />
                 </div>
 

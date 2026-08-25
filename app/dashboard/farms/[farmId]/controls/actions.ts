@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateRelay } from "@/lib/plan-limits";
+import { canCreateRelay, getUserPlan } from "@/lib/plan-limits";
 import { publishToDevice, getDeviceRetained } from "@/lib/device-mqtt";
 
 type DeviceOwnership = { device_uid: string; farm_id: string; customer_uuid: string };
@@ -49,10 +49,13 @@ export async function createRelay(deviceId: string, formData: FormData): Promise
   const check = await canCreateRelay(supabase, user.id);
   if (!check.ok) throw new Error(check.reason ?? "เกินโควตาแพ็กเกจ");
 
+  const plan = await getUserPlan(supabase, user.id);
+  const maxChannel = plan.limits.max_relays === null ? 4 : Math.min(4, plan.limits.max_relays);
+
   const channel = Number(formData.get("channel"));
   const name = String(formData.get("name") ?? "").trim() || `ตัวควบคุม ${channel}`;
-  if (!Number.isInteger(channel) || channel < 1 || channel > 4) {
-    throw new Error("Channel ต้องเป็น 1-4 (ตามฮาร์ดแวร์ ESP32-S3 4-channel relay)");
+  if (!Number.isInteger(channel) || channel < 1 || channel > maxChannel) {
+    throw new Error(`Channel ต้องเป็น 1-${maxChannel} ตามสิทธิ์แพ็กเกจ ${plan.name}`);
   }
 
   const { error } = await supabase.from("relays").insert({ device_id: deviceId, channel, name });

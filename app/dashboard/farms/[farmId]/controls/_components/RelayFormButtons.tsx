@@ -6,20 +6,22 @@ import { createRelay, deleteRelay } from "../actions";
 export function AddRelayButton({
   deviceId,
   usedChannels,
+  maxChannel,
   disabled,
 }: {
   deviceId: string;
   usedChannels: number[];
+  maxChannel: number;
   disabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const available = [1, 2, 3, 4].filter((c) => !usedChannels.includes(c));
+  const available = Array.from({ length: maxChannel }, (_, i) => i + 1).filter((c) => !usedChannels.includes(c));
 
   if (disabled) {
     return (
       <span
         className="text-xs text-brand-900/40 cursor-not-allowed"
-        title="เต็มโควตาแพ็กเกจ หรือใช้ครบ 4 channel แล้ว"
+        title={`เต็มโควตาแพ็กเกจ หรือใช้ครบ ${maxChannel} channel ที่แพ็กเกจอนุญาตแล้ว`}
       >
         + เพิ่ม Relay (เต็มโควตา)
       </span>
