@@ -8,7 +8,11 @@
 import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./types";
 import { AiProviderError } from "./types";
 
-const TIMEOUT_MS = 20_000;
+// Free-tier Gemini requests occasionally run well past 20s (rate-limit
+// queuing, cold inference) — confirmed live via a TimeoutError on a chat
+// call ~1 request after a successful analyze call. Route handlers set
+// maxDuration to give Vercel's own platform timeout enough headroom above this.
+const TIMEOUT_MS = 28_000;
 const MAX_OUTPUT_TOKENS = 800;
 
 const ANALYSIS_SCHEMA = {
