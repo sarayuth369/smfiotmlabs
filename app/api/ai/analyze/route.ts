@@ -6,7 +6,7 @@ import { getDeviceAiContext, getFarmAiContext } from "@/lib/ai/context";
 import { buildAnalysisPrompt } from "@/lib/ai/prompt";
 import { AIService, friendlyAiError } from "@/lib/ai";
 import { checkAiQuota, logAiRequest, findCachedAnalysis } from "@/lib/ai/quota";
-import { getFarmIdForDevice, getZoneForDevice, getPrimaryZoneForFarm, daysUntil, type ZoneInfo } from "@/lib/farm-location";
+import { getFarmIdForDevice, getFarmLocation, getZoneForDevice, getPrimaryZoneForFarm, daysUntil, type ZoneInfo, type FarmLocation } from "@/lib/farm-location";
 import { getWeatherPromptContext } from "@/lib/weather";
 import type { ZonePromptContext } from "@/lib/ai/prompt";
 
@@ -27,10 +27,22 @@ function toZonePromptContext(zone: ZoneInfo | null): ZonePromptContext | null {
   return { zone, daysToHarvest: daysUntil(zone.expected_harvest_date) };
 }
 
-/** Cache key component — changes whenever the zone's crop/dates change, so a cache hit can never serve stale crop_advisory. */
+/**
+ * Cache key component — changes whenever the zone's crop/dates OR the farm's
+ * location change, so a cache hit can never serve advisory text generated
+ * for a different crop or a different place (location drives the WEATHER
+ * block baked into the same cached result).
+ */
 function zoneSignature(zone: ZoneInfo | null): string {
   if (!zone) return "none";
   return `${zone.id}:${zone.crop_type ?? ""}:${zone.planting_date ?? ""}:${zone.expected_harvest_date ?? ""}`;
+}
+
+function farmSignature(farm: FarmLocation | null): string {
+  if (!farm) return "none";
+  const lat = farm.latitude !== null ? farm.latitude.toFixed(2) : "";
+  const lon = farm.longitude !== null ? farm.longitude.toFixed(2) : "";
+  return `${farm.id}:${lat},${lon}:${farm.subdistrict ?? ""}:${farm.district ?? ""}:${farm.province ?? ""}`;
 }
 
 export const runtime = "nodejs";
@@ -70,11 +82,14 @@ export async function POST(req: Request) {
     if (scope === "device") {
       if (!body.device_id) return NextResponse.json({ error: "device_id is required" }, { status: 400 });
 
-      // Zone is a cheap direct DB read (no AI call) — always resolve fresh, and use it to key the cache so a crop/date change never serves stale advisory text.
+      // Zone + farm location are cheap direct DB reads (no AI call, no external API) — always resolve fresh,
+      // and use both to key the cache so a crop/date change OR a farm location change never serves stale advisory text.
       const zone = await getZoneForDevice(supabase, user.id, body.device_id);
-      const zoneSig = zoneSignature(zone);
+      const farmId = await getFarmIdForDevice(supabase, user.id, body.device_id);
+      const farmLoc = farmId ? await getFarmLocation(supabase, user.id, farmId) : null;
+      const contextSig = `${zoneSignature(zone)}|${farmSignature(farmLoc)}`;
 
-      const cached = await findCachedAnalysis(admin, user.id, body.device_id, periodDays, zoneSig);
+      const cached = await findCachedAnalysis(admin, user.id, body.device_id, periodDays, contextSig);
       if (cached) {
         return NextResponse.json({ ...cached.result, cached: true, provider: cached.provider, model: cached.model, zone: toZoneSummary(zone) });
       }
@@ -89,13 +104,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Not enough sensor history for analysis." }, { status: 422 });
       }
 
-      const farmId = await getFarmIdForDevice(supabase, user.id, body.device_id);
       const weather = await getWeatherPromptContext(supabase, admin, user.id, farmId);
 
       const { system, user: userPrompt } = buildAnalysisPrompt([context], advanced, weather, toZonePromptContext(zone));
       const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
-      await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: body.device_id, period_days: periodDays, zone_signature: zoneSig, ok: true, result });
+      await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: body.device_id, period_days: periodDays, zone_signature: contextSig, ok: true, result });
       return NextResponse.json({ ...result, cached: false, provider: providerId, model, zone: toZoneSummary(zone) });
     }
 
@@ -114,11 +128,12 @@ export async function POST(req: Request) {
 
     const weather = await getWeatherPromptContext(supabase, admin, user.id, body.farm_id);
     const zone = await getPrimaryZoneForFarm(supabase, user.id, body.farm_id);
+    const farmLoc = await getFarmLocation(supabase, user.id, body.farm_id);
 
     const { system, user: userPrompt } = buildAnalysisPrompt(contexts, advanced, weather, toZonePromptContext(zone));
     const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
-    await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: null, period_days: periodDays, zone_signature: zoneSignature(zone), ok: true, result });
+    await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: null, period_days: periodDays, zone_signature: `${zoneSignature(zone)}|${farmSignature(farmLoc)}`, ok: true, result });
     return NextResponse.json({ ...result, cached: false, provider: providerId, model, zone: toZoneSummary(zone) });
   } catch (e) {
     await logAiRequest(admin, {
