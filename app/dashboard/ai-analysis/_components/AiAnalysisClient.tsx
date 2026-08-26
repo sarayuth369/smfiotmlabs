@@ -63,18 +63,55 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [voiceOn, setVoiceOn] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
-    setVoiceSupported(typeof window !== "undefined" && "speechSynthesis" in window);
-    setVoiceOn(typeof window !== "undefined" && localStorage.getItem("ai_voice_on") === "1");
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    setVoiceSupported(true);
+    setVoiceOn(localStorage.getItem("ai_voice_on") === "1");
+    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
+
+  // Best matching Thai voice actually installed on this device/browser — setting only
+  // utterance.lang isn't enough, Chrome silently falls back to a default English voice
+  // (garbled/near-silent on Thai script) unless a matching voice object is set explicitly.
+  function pickThaiVoice(): SpeechSynthesisVoice | null {
+    const thai = voices.filter((v) => v.lang.toLowerCase().startsWith("th"));
+    if (thai.length === 0) return null;
+    return thai.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? thai[0];
+  }
+
+  // Chrome/Edge silently stop a single long utterance after roughly 15s of speech —
+  // queue it as several shorter utterances instead (speechSynthesis plays queued
+  // utterances back-to-back automatically).
+  function chunkText(text: string, maxLen = 180): string[] {
+    const parts = text.split(/(\s+)/);
+    const chunks: string[] = [];
+    let current = "";
+    for (const part of parts) {
+      if (current && (current + part).length > maxLen) {
+        chunks.push(current);
+        current = part;
+      } else {
+        current += part;
+      }
+    }
+    if (current.trim()) chunks.push(current);
+    return chunks;
+  }
 
   function speak(text: string) {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "th-TH";
-    window.speechSynthesis.speak(utter);
+    const voice = pickThaiVoice();
+    for (const chunk of chunkText(text)) {
+      const utter = new SpeechSynthesisUtterance(chunk);
+      utter.lang = "th-TH";
+      if (voice) utter.voice = voice;
+      window.speechSynthesis.speak(utter);
+    }
   }
 
   function toggleVoice() {
