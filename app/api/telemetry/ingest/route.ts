@@ -11,6 +11,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { evaluateReadingAgainstRules } from "@/lib/automation";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 import {
   checkDeviceRateLimit,
   checkCustomerRateLimit,
@@ -153,7 +154,7 @@ export async function POST(req: Request) {
   // done as separate query only when caller provided customer_identity_id.
   const { data: device, error: devErr } = await admin
     .from("iot_nodes")
-    .select("id, is_disabled, archived_at, farm_id")
+    .select("id, is_disabled, archived_at, farm_id, last_seen")
     .eq("device_uid", body.device_uid)
     .maybeSingle();
   if (devErr || !device) {
@@ -162,6 +163,25 @@ export async function POST(req: Request) {
   }
   if (device.is_disabled) return json({ ok: false, error: "device disabled" }, 403);
   if (device.archived_at) return json({ ok: false, error: "device archived" }, 403);
+
+  // Phase 6.13 — was this device offline before THIS message? (checked
+  // before any update below overwrites last_seen). Only matters for the
+  // rare "device_online" webhook case, so it's computed once here and
+  // resolved (farm -> user_id, only if actually needed) close to each
+  // dispatch call rather than unconditionally on every request.
+  const dev = device; // re-bind so TS keeps the non-null narrowing inside the closure below
+  const wasOffline =
+    !dev.last_seen || Date.now() - new Date(dev.last_seen as string).getTime() > 60_000;
+  async function notifyDeviceOnline() {
+    if (!wasOffline) return;
+    const { data: farm } = await admin.from("farms").select("user_id").eq("id", dev.farm_id as string).maybeSingle();
+    if (!farm?.user_id) return;
+    await dispatchWebhookEvent(admin, farm.user_id as string, "device_online", {
+      device_id: dev.id,
+      device_uid: body.device_uid,
+      occurred_at: new Date().toISOString(),
+    });
+  }
 
   // Ownership cross-check (multi-tenant safety) — 2-step resolve to avoid
   // fragile PostgREST embeds. Only enforced when bridge sent customer_identity_id.
@@ -213,6 +233,21 @@ export async function POST(req: Request) {
       event_type: body.event_type ?? "heartbeat",
       payload: { status: body.status, metadata: body.metadata ?? null },
     });
+    await notifyDeviceOnline();
+    // Only dispatch for a firmware-named event, never the generic
+    // heartbeat fallback — heartbeats fire too often to be a useful webhook.
+    if (body.event_type) {
+      const { data: farm } = await admin.from("farms").select("user_id").eq("id", device.farm_id as string).maybeSingle();
+      if (farm?.user_id) {
+        await dispatchWebhookEvent(admin, farm.user_id as string, "device_event", {
+          device_id: device.id,
+          device_uid: body.device_uid,
+          event_type: body.event_type,
+          metadata: body.metadata ?? null,
+          occurred_at: new Date().toISOString(),
+        });
+      }
+    }
     return json({
       ok: true,
       device_uid: body.device_uid,
@@ -380,6 +415,7 @@ export async function POST(req: Request) {
     .from("iot_nodes")
     .update({ last_seen: new Date().toISOString(), status: "online" })
     .eq("id", device.id);
+  await notifyDeviceOnline();
 
   // Run automation rule engine — evaluate each reading against sensor_value rules
   let automation = { evaluated: 0, executed: 0, skipped: 0, failed: 0 };

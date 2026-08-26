@@ -15,6 +15,8 @@ type PlanRow = {
   max_sensors: number | null;
   max_relays: number | null;
   sensor_history_days: number | null;
+  max_api_keys: number | null;
+  api_rate_limit_per_min: number | null;
   entitlements: Record<string, boolean> | null;
   sort_order: number;
   is_active: boolean;
@@ -28,7 +30,9 @@ export default async function PlanLimitsPage() {
 
   const { data } = await admin
     .from("subscription_plans")
-    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, entitlements, sort_order, is_active")
+    .select(
+      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, entitlements, sort_order, is_active"
+    )
     .in("plan_id", PLAN_ORDER as unknown as string[]);
 
   const rows = (data ?? []) as PlanRow[];
@@ -83,13 +87,20 @@ export default async function PlanLimitsPage() {
                   <LimitInput name="max_sensors" label="Max Sensors" initial={p.max_sensors} />
                   <LimitInput name="max_relays" label="Max Relays" initial={p.max_relays} />
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 grid sm:grid-cols-2 gap-4">
                   <LimitInput
                     name="sensor_history_days"
                     label="Sensor History"
                     initial={p.sensor_history_days}
                     suffix="วัน"
                     min={1}
+                  />
+                  <LimitInput name="max_api_keys" label="Max API Keys" initial={p.max_api_keys} />
+                  <LimitInput
+                    name="api_rate_limit_per_min"
+                    label="API Rate Limit"
+                    initial={p.api_rate_limit_per_min}
+                    suffix="req/min"
                   />
                 </div>
               </div>

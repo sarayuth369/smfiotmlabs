@@ -9,6 +9,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMqttTopic, publishMqtt } from "@/lib/mqtt";
 import { randomUUID } from "crypto";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 
 export type SensorTriggerConfig = {
   sensor_type: string;
@@ -175,6 +176,21 @@ export async function evaluateReadingAgainstRules(
       .from("automation_rules")
       .update({ last_triggered_at: new Date().toISOString() })
       .eq("id", rule.id);
+
+    // Business/Premium webhooks (Phase 6.13) — cheap no-op query when the
+    // account has none configured. Awaited (not fire-and-forget) because a
+    // serverless function can be frozen right after its response is sent,
+    // which would silently drop an in-flight delivery.
+    await dispatchWebhookEvent(admin, rule.user_id, "sensor_threshold", {
+      rule_id: rule.id,
+      device_id: reading.device_id,
+      sensor_id: reading.sensor_id,
+      sensor_type: reading.sensor_type,
+      value: reading.value,
+      operator: cfg.operator,
+      threshold: cfg.value,
+      occurred_at: reading.occurred_at,
+    });
 
     if (mqttOk || rule.action_type === "notification") stats.executed++;
     else stats.failed++;

@@ -196,3 +196,8 @@ export async function checkInvalidRequestLimit(ip: string): Promise<RateLimitChe
     RATE_LIMIT_CONFIG.windowSec
   );
 }
+
+/** Phase 6.13 — customer API. Limit varies per plan (api_rate_limit_per_min), not a fixed constant like the others. */
+export async function checkApiKeyRateLimit(apiKeyId: string, limitPerMin: number): Promise<RateLimitCheck> {
+  return getRateLimiter().check("apikey", apiKeyId, Math.max(1, limitPerMin), 60);
+}

@@ -10,6 +10,8 @@ export type PlanLimits = {
   max_sensors: number | null;
   max_relays: number | null;
   sensor_history_days: number | null;
+  max_api_keys: number | null;
+  api_rate_limit_per_min: number | null;
 };
 
 /** Feature-flag map — extend keys freely; unknown keys default to false. */
@@ -26,20 +28,21 @@ export type UserPlan = {
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7 },
-  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90 },
-  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365 },
-  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null },
+  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0 },
+  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60 },
+  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300 },
+  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600 },
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: { reports: true, rules: true, sheets_export: true, csv_export: true },
-  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true },
+  starter: { reports: true, rules: true, sheets_export: true, csv_export: true, api: false, api_control: false },
+  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true, api: true, api_control: false },
   business: {
     line_notify: true,
     reports: true,
     ota: true,
     api: true,
+    api_control: true,
     automation: true,
     rules: true,
     sheets_export: true,
@@ -50,6 +53,7 @@ const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     reports: true,
     ota: true,
     api: true,
+    api_control: true,
     automation: true,
     rules: true,
     sheets_export: true,
@@ -85,7 +89,9 @@ export async function getUserPlan(
 
   const { data: row } = await supabase
     .from("subscription_plans")
-    .select("plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, entitlements")
+    .select(
+      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, entitlements"
+    )
     .eq("plan_id", planId)
     .maybeSingle();
 
@@ -115,6 +121,8 @@ export async function getUserPlan(
       sensor_history_days: row
         ? (row.sensor_history_days as number | null)
         : fb.sensor_history_days,
+      max_api_keys: row ? (row.max_api_keys as number | null) : fb.max_api_keys,
+      api_rate_limit_per_min: row ? (row.api_rate_limit_per_min as number | null) : fb.api_rate_limit_per_min,
     },
     entitlements,
   };
@@ -130,6 +138,7 @@ export const KNOWN_FEATURES = [
   { key: "sheets_export", label: "บันทึกลง Google Sheet" },
   { key: "ota", label: "OTA Firmware" },
   { key: "api", label: "API Access" },
+  { key: "api_control", label: "API Control + Webhook" },
   { key: "reports", label: "Reports" },
   { key: "automation", label: "Automation" },
   { key: "rules", label: "Rules" },
