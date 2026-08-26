@@ -8,6 +8,26 @@ import { canCreateZone } from "@/lib/plan-limits";
 const AREA_UNITS = ["ไร่", "งาน", "ตร.ว.", "ตร.ม."] as const;
 type AreaUnit = (typeof AREA_UNITS)[number];
 
+/**
+ * A Windows machine set to the Thai (Buddhist calendar) regional format makes Chrome's
+ * native <input type="date"> submit the year as-is in the Buddhist calendar (e.g. 2569)
+ * instead of converting it to Gregorian — a known OS/browser quirk, not a user typo. Silently
+ * subtract 543 when that reads as a sane Gregorian year; only reject if it still doesn't.
+ */
+function normalizeDateField(label: string, value: string | null, thisYear: number): string | null {
+  if (!value) return null;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return value;
+  let year = Number(m[1]);
+  if (year > thisYear + 20 && year - 543 >= thisYear - 50 && year - 543 <= thisYear + 20) {
+    year -= 543;
+  }
+  if (year < thisYear - 50 || year > thisYear + 20) {
+    throw new Error(`${label}: ปี ${m[1]} ดูผิดปกติ กรุณาตรวจสอบวันที่อีกครั้ง`);
+  }
+  return `${year}-${m[2]}-${m[3]}`;
+}
+
 function parseZoneFields(fd: FormData) {
   const name = String(fd.get("name") ?? "").trim();
   const description = String(fd.get("description") ?? "").trim() || null;
@@ -22,22 +42,15 @@ function parseZoneFields(fd: FormData) {
     ? (areaUnitRaw as AreaUnit)
     : "ไร่";
 
-  const planting_date = String(fd.get("planting_date") ?? "").trim() || null;
-  const expected_harvest_date = String(fd.get("expected_harvest_date") ?? "").trim() || null;
+  const thisYear = new Date().getFullYear();
+  const planting_date = normalizeDateField("วันที่เพาะปลูก", String(fd.get("planting_date") ?? "").trim() || null, thisYear);
+  const expected_harvest_date = normalizeDateField(
+    "วันที่คาดว่าจะเก็บเกี่ยว",
+    String(fd.get("expected_harvest_date") ?? "").trim() || null,
+    thisYear
+  );
 
   if (!name) throw new Error("กรุณากรอกชื่อแปลง");
-
-  // Sanity-check years — a date picker/OS set to Thai (Buddhist) calendar can save a
-  // year 543 too high (e.g. 2569 instead of 2026); reject rather than silently store
-  // a ~500-year-out date that later shows as a nonsense "days to harvest" count.
-  const thisYear = new Date().getFullYear();
-  for (const [label, value] of [["วันที่เพาะปลูก", planting_date], ["วันที่คาดว่าจะเก็บเกี่ยว", expected_harvest_date]] as const) {
-    if (!value) continue;
-    const year = Number(value.slice(0, 4));
-    if (!isNaN(year) && (year < thisYear - 50 || year > thisYear + 20)) {
-      throw new Error(`${label}: ปี ${year} ดูผิดปกติ — ถ้าใช้ปี พ.ศ. กรุณาแปลงเป็น ค.ศ. ก่อนกรอก (เช่น พ.ศ. 2569 = ค.ศ. 2026)`);
-    }
-  }
 
   return { name, description, area, area_unit, crop_type, planting_date, expected_harvest_date };
 }
