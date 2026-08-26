@@ -61,6 +61,28 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+
+  useEffect(() => {
+    setVoiceSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+    setVoiceOn(typeof window !== "undefined" && localStorage.getItem("ai_voice_on") === "1");
+  }, []);
+
+  function speak(text: string) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "th-TH";
+    window.speechSynthesis.speak(utter);
+  }
+
+  function toggleVoice() {
+    const next = !voiceOn;
+    setVoiceOn(next);
+    localStorage.setItem("ai_voice_on", next ? "1" : "0");
+    if (!next && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
 
   function scopeBody() {
     const [kind, id] = selected.split(":");
@@ -121,6 +143,7 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
         return;
       }
       setMessages([...nextMessages, { role: "assistant", content: data.answer }]);
+      if (voiceOn) speak(data.answer);
     } catch {
       setChatError("AI service is temporarily unavailable.");
     } finally {
@@ -274,7 +297,21 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
       )}
 
       <div className="card p-6">
-        <h2 className="font-bold text-brand-800 mb-1">Ask AI</h2>
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <h2 className="font-bold text-brand-800">Ask AI</h2>
+          {voiceSupported && (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition ${
+                voiceOn ? "bg-brand-600 text-white" : "border border-border text-brand-800 hover:border-brand-400"
+              }`}
+              title={voiceOn ? "ปิดเสียงอ่านคำตอบ" : "เปิดเสียงอ่านคำตอบ"}
+            >
+              {voiceOn ? "🔊 เสียงเปิด" : "🔇 เสียงปิด"}
+            </button>
+          )}
+        </div>
         <p className="text-xs text-brand-900/50 mb-3">ถาม AI เกี่ยวกับฟาร์มของคุณ — สภาพอากาศ, ค่า Sensor, หรือความรู้การเกษตรทั่วไป</p>
 
         {messages.length > 0 && (
