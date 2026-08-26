@@ -6,6 +6,8 @@ import { getDeviceAiContext, getFarmAiContext } from "@/lib/ai/context";
 import { buildChatSystemPrompt } from "@/lib/ai/prompt";
 import { AIService, friendlyAiError, type AiChatTurn } from "@/lib/ai";
 import { checkAiQuota, logAiRequest } from "@/lib/ai/quota";
+import { getFarmIdForDevice } from "@/lib/farm-location";
+import { getWeatherPromptContext } from "@/lib/weather";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,7 +80,10 @@ export async function POST(req: Request) {
               throw new Error("farm_id is required");
             })();
 
-    const system = buildChatSystemPrompt(contexts, advanced);
+    const farmId = scope === "device" && body.device_id ? await getFarmIdForDevice(supabase, user.id, body.device_id) : (body.farm_id ?? null);
+    const weather = await getWeatherPromptContext(supabase, admin, user.id, farmId);
+
+    const system = buildChatSystemPrompt(contexts, advanced, weather);
     const { result, providerId, model } = await AIService.chat(system, history, question);
 
     await logAiRequest(admin, {

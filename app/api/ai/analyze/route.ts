@@ -6,6 +6,8 @@ import { getDeviceAiContext, getFarmAiContext } from "@/lib/ai/context";
 import { buildAnalysisPrompt } from "@/lib/ai/prompt";
 import { AIService, friendlyAiError } from "@/lib/ai";
 import { checkAiQuota, logAiRequest, findCachedAnalysis } from "@/lib/ai/quota";
+import { getFarmIdForDevice } from "@/lib/farm-location";
+import { getWeatherPromptContext } from "@/lib/weather";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
     if (scope === "device") {
       if (!body.device_id) return NextResponse.json({ error: "device_id is required" }, { status: 400 });
 
-      const cached = await findCachedAnalysis(admin, user.id, body.device_id);
+      const cached = await findCachedAnalysis(admin, user.id, body.device_id, periodDays);
       if (cached) {
         return NextResponse.json({ ...cached.result, cached: true, provider: cached.provider, model: cached.model });
       }
@@ -59,10 +61,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Not enough sensor history for analysis." }, { status: 422 });
       }
 
-      const { system, user: userPrompt } = buildAnalysisPrompt([context], advanced);
+      const farmId = await getFarmIdForDevice(supabase, user.id, body.device_id);
+      const weather = await getWeatherPromptContext(supabase, admin, user.id, farmId);
+
+      const { system, user: userPrompt } = buildAnalysisPrompt([context], advanced, weather);
       const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
-      await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: body.device_id, ok: true, result });
+      await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: body.device_id, period_days: periodDays, ok: true, result });
       return NextResponse.json({ ...result, cached: false, provider: providerId, model });
     }
 
@@ -79,10 +84,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not enough sensor history for analysis." }, { status: 422 });
     }
 
-    const { system, user: userPrompt } = buildAnalysisPrompt(contexts, advanced);
+    const weather = await getWeatherPromptContext(supabase, admin, user.id, body.farm_id);
+
+    const { system, user: userPrompt } = buildAnalysisPrompt(contexts, advanced, weather);
     const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
-    await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: null, ok: true, result });
+    await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: null, period_days: periodDays, ok: true, result });
     return NextResponse.json({ ...result, cached: false, provider: providerId, model });
   } catch (e) {
     await logAiRequest(admin, {

@@ -33,10 +33,10 @@ export default async function AiAnalysisPage() {
     : { data: [] };
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-brand-800">AI Analysis</h1>
-        <p className="text-sm text-brand-900/60 mt-1">วิเคราะห์ข้อมูล Sensor ด้วย AI — สรุปแนวโน้ม ความผิดปกติ และคำแนะนำ</p>
+        <p className="text-sm text-brand-900/60 mt-1">สภาพอากาศ คำแนะนำเกษตร และการวิเคราะห์ Sensor ด้วย AI ตามตำแหน่งฟาร์มของคุณ</p>
       </div>
 
       <AiAnalysisClient

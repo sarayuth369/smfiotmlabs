@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FarmWeatherSection } from "./FarmWeatherSection";
 
 type Farm = { id: string; name: string };
 type Device = { id: string; device_name: string; farm_id: string };
@@ -48,6 +49,12 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
+  const currentFarmId = useMemo(() => {
+    const [kind, id] = selected.split(":");
+    if (kind === "farm") return id;
+    return devices.find((d) => d.id === id)?.farm_id ?? null;
+  }, [selected, devices]);
+
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -81,6 +88,16 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
       setLoading(false);
     }
   }
+
+  // Auto-load the advisory when the page opens or the selection changes —
+  // weather (FarmWeatherSection, below) fetches independently and never
+  // waits on this, so the farmer sees real weather immediately even if the
+  // AI call is slow. Cache/quota from the API route still applies, so
+  // switching back and forth doesn't burn extra provider calls.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    handleAnalyze();
+  }, [selected]);
 
   async function handleSend() {
     const question = chatInput.trim();
@@ -121,6 +138,8 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
 
   return (
     <div className="space-y-5">
+      {currentFarmId && <FarmWeatherSection key={currentFarmId} farmId={currentFarmId} />}
+
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -163,6 +182,18 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
         </button>
         {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
       </div>
+
+      {(result || loading) && (
+        <div className="px-1">
+          <h2 className="text-sm font-bold text-brand-900/70 uppercase tracking-wider">🌱 คำแนะนำสำหรับฟาร์ม</h2>
+        </div>
+      )}
+
+      {!result && loading && (
+        <div className="card p-6">
+          <div className="h-16 flex items-center justify-center text-sm text-brand-900/40">กำลังวิเคราะห์ข้อมูลฟาร์ม...</div>
+        </div>
+      )}
 
       {result && (
         <>
@@ -233,7 +264,7 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
 
       <div className="card p-6">
         <h2 className="font-bold text-brand-800 mb-1">Ask AI</h2>
-        <p className="text-xs text-brand-900/50 mb-3">ถาม AI เกี่ยวกับข้อมูล Sensor ของอุปกรณ์ที่เลือก</p>
+        <p className="text-xs text-brand-900/50 mb-3">ถาม AI เกี่ยวกับฟาร์มของคุณ — สภาพอากาศ, ค่า Sensor, หรือความรู้การเกษตรทั่วไป</p>
 
         {messages.length > 0 && (
           <div className="space-y-2 mb-3 max-h-72 overflow-y-auto">
