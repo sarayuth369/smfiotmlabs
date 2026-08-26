@@ -8,11 +8,13 @@
 import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./types";
 import { AiProviderError } from "./types";
 
-// Free-tier Gemini requests occasionally run well past 20s (rate-limit
-// queuing, cold inference) — confirmed live via a TimeoutError on a chat
-// call ~1 request after a successful analyze call. Route handlers set
-// maxDuration to give Vercel's own platform timeout enough headroom above this.
-const TIMEOUT_MS = 28_000;
+// Free-tier Gemini requests can run well past 20-30s — confirmed live,
+// consistently on a chat call made shortly after an analyze call (looks
+// like free-tier per-minute rate-limit queuing on Google's side, not a
+// bug here: the request is well-formed and analyze succeeds every time).
+// Route handlers set maxDuration to give Vercel's own platform timeout
+// enough headroom above this.
+const TIMEOUT_MS = 55_000;
 const MAX_OUTPUT_TOKENS = 800;
 
 const ANALYSIS_SCHEMA = {
@@ -77,10 +79,11 @@ async function callGemini(
   } catch (e) {
     // Log the exception itself (never the key — it's only ever in the
     // request URL, never in this error object) — otherwise a runtime-level
-    // failure (e.g. AbortSignal.timeout unsupported, DNS, TLS) is
-    // indistinguishable from "no key configured" and impossible to debug.
+    // failure (e.g. DNS, TLS) is indistinguishable from "no key configured"
+    // and impossible to debug.
     console.warn("[ai.gemini] fetch threw", e instanceof Error ? `${e.name}: ${e.message}` : String(e));
-    throw new AiProviderError("Gemini request failed", "unavailable");
+    const isTimeout = e instanceof Error && e.name === "TimeoutError";
+    throw new AiProviderError(isTimeout ? "Gemini request timed out" : "Gemini request failed", isTimeout ? "timeout" : "unavailable");
   }
 
   if (!res.ok) {

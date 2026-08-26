@@ -9,7 +9,7 @@ import { checkAiQuota, logAiRequest } from "@/lib/ai/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30; // headroom above gemini-provider.ts's 28s request timeout
+export const maxDuration = 58; // headroom above gemini-provider.ts's 55s request timeout
 
 const MAX_HISTORY_TURNS = 6;
 const MAX_QUESTION_LEN = 500;

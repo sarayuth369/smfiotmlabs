@@ -25,7 +25,7 @@ export interface AiProvider {
 export class AiProviderError extends Error {
   constructor(
     message: string,
-    public readonly code: "unavailable" | "provider_error" | "invalid_response"
+    public readonly code: "unavailable" | "provider_error" | "invalid_response" | "timeout"
   ) {
     super(message);
     this.name = "AiProviderError";

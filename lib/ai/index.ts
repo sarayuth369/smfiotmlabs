@@ -37,6 +37,7 @@ async function resolveActiveProvider(): Promise<{ provider: AiProvider; provider
 export function friendlyAiError(e: unknown): string {
   if (e instanceof AiProviderError) {
     if (e.code === "unavailable") return "AI provider is currently unavailable.";
+    if (e.code === "timeout") return "AI service is taking longer than usual — please try again in a moment.";
     if (e.code === "provider_error") return "AI service is temporarily unavailable.";
     return "AI service is temporarily unavailable.";
   }

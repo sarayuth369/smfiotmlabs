@@ -9,7 +9,7 @@ import { checkAiQuota, logAiRequest, findCachedAnalysis } from "@/lib/ai/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30; // headroom above gemini-provider.ts's 28s request timeout
+export const maxDuration = 58; // headroom above gemini-provider.ts's 55s request timeout
 
 type Body = { device_id?: string; farm_id?: string; scope?: "device" | "farm"; period_days?: number };
 
