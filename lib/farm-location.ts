@@ -101,12 +101,19 @@ export async function getPrimaryZoneForFarm(supabase: SupabaseClient, userId: st
   return toZoneInfo(data as Record<string, unknown>);
 }
 
-/** Real elapsed-days math from a real date — never estimate a crop's maturity period. Negative = past due. */
+/**
+ * Real elapsed-days math from a real date — never estimate a crop's maturity period. Negative = past due.
+ * Returns null for a date more than ~15 years out either way — legacy rows saved before the
+ * Buddhist/Gregorian year validation existed can hold a year ~543 too high; better to show
+ * nothing than a nonsense multi-century countdown.
+ */
 export function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
   const target = new Date(dateStr).getTime();
   if (isNaN(target)) return null;
   const now = new Date();
   const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((target - todayUtc) / 86_400_000);
+  const days = Math.round((target - todayUtc) / 86_400_000);
+  if (Math.abs(days) > 5475) return null;
+  return days;
 }

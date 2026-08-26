@@ -27,6 +27,18 @@ function parseZoneFields(fd: FormData) {
 
   if (!name) throw new Error("กรุณากรอกชื่อแปลง");
 
+  // Sanity-check years — a date picker/OS set to Thai (Buddhist) calendar can save a
+  // year 543 too high (e.g. 2569 instead of 2026); reject rather than silently store
+  // a ~500-year-out date that later shows as a nonsense "days to harvest" count.
+  const thisYear = new Date().getFullYear();
+  for (const [label, value] of [["วันที่เพาะปลูก", planting_date], ["วันที่คาดว่าจะเก็บเกี่ยว", expected_harvest_date]] as const) {
+    if (!value) continue;
+    const year = Number(value.slice(0, 4));
+    if (!isNaN(year) && (year < thisYear - 50 || year > thisYear + 20)) {
+      throw new Error(`${label}: ปี ${year} ดูผิดปกติ — ถ้าใช้ปี พ.ศ. กรุณาแปลงเป็น ค.ศ. ก่อนกรอก (เช่น พ.ศ. 2569 = ค.ศ. 2026)`);
+    }
+  }
+
   return { name, description, area, area_unit, crop_type, planting_date, expected_harvest_date };
 }
 
