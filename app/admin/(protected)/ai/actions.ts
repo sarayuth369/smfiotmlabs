@@ -11,7 +11,7 @@ export async function updateAiConfig(formData: FormData): Promise<void> {
   const config: AiConfig = {
     default_provider,
     gemini_enabled: formData.get("gemini_enabled") === "on",
-    gemini_model: String(formData.get("gemini_model") ?? "").trim() || "gemini-2.5-flash-lite",
+    gemini_model: String(formData.get("gemini_model") ?? "").trim() || "gemini-3.5-flash-lite",
     openai_enabled: formData.get("openai_enabled") === "on",
     openai_model: String(formData.get("openai_model") ?? "").trim() || "gpt-4o-mini",
   };

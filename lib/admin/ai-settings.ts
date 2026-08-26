@@ -25,7 +25,9 @@ export type AiConfig = {
 const DEFAULT_AI_CONFIG: AiConfig = {
   default_provider: "gemini",
   gemini_enabled: true,
-  gemini_model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+  // gemini-2.5-flash-lite was retired for new accounts (confirmed live,
+  // Aug 2026 — Google's own 404 error names the replacement explicitly).
+  gemini_model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   openai_enabled: false,
   openai_model: process.env.OPENAI_MODEL || "gpt-4o-mini",
 };
