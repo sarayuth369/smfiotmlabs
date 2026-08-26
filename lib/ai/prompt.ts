@@ -1,5 +1,6 @@
 import type { DeviceAiContext } from "./context";
 import type { WeatherPromptContext } from "@/lib/weather";
+import type { ZoneInfo } from "@/lib/farm-location";
 
 const BASE_RULES = `You are "SMF Farm Assistant", an agricultural AI assistant for SMF IoT customers. Answer in Thai, conversational and genuinely useful to a farmer — not a narrow data-lookup tool.
 
@@ -72,22 +73,53 @@ function formatWeatherBlock(ctx: WeatherPromptContext | null): string {
   return `\n\nWEATHER:\n${lines.join("\n")}`;
 }
 
+export type ZonePromptContext = { zone: ZoneInfo; daysToHarvest: number | null };
+
+function formatZoneBlock(ctx: ZonePromptContext | null): string {
+  if (!ctx || !ctx.zone.crop_type) return "";
+  const z = ctx.zone;
+  const lines = [`Zone: ${z.name}`, `Crop: ${z.crop_type}`];
+  if (z.area) lines.push(`Area: ${z.area} ${z.area_unit ?? ""}`.trim());
+  if (z.planting_date) lines.push(`Planting date: ${z.planting_date}`);
+  if (z.expected_harvest_date) {
+    lines.push(`Expected harvest date: ${z.expected_harvest_date}`);
+    if (ctx.daysToHarvest !== null) {
+      lines.push(
+        ctx.daysToHarvest >= 0
+          ? `Days until expected harvest: ${ctx.daysToHarvest} (computed from the real date above — use this number as-is, never recalculate or guess a different maturity period)`
+          : `Expected harvest date has passed (${Math.abs(ctx.daysToHarvest)} day(s) ago) — this zone may be in/past harvest, mention that rather than "days until harvest"`
+      );
+    }
+  } else {
+    lines.push("Expected harvest date: not set — do not invent a harvest countdown");
+  }
+  return `\n\nZONE:\n${lines.join("\n")}`;
+}
+
 export function buildAnalysisPrompt(
   contexts: DeviceAiContext[],
   advanced: boolean,
-  weather: WeatherPromptContext | null = null
+  weather: WeatherPromptContext | null = null,
+  zone: ZonePromptContext | null = null
 ): { system: string; user: string } {
   const scope = advanced
     ? "You may compare across multiple devices and explain trends in more depth, including cross-device recommendations."
     : "Focus on a single device. Keep the analysis basic and direct — sensor summary, simple trend, simple anomaly notes, one or two recommendations.";
 
+  const hasCrop = !!(zone && zone.zone.crop_type);
+  const cropRule = hasCrop
+    ? `A "ZONE:" block below names the real crop planted here — analyze SPECIFICALLY for that crop, not generic advice. Fill crop_advisory: environment_notes = how the current temp/humidity/soil/light/weather (from DATA/WEATHER) suit THIS crop; watch_items = 2-3 concrete things to check, most important first; pest_disease_notes = clearly hedge as general/seasonal risk for this crop given the weather — NEVER claim a real local outbreak exists (none is connected as data) unless one appears explicitly in DATA/WEATHER, always frame as "ยังไม่พบข้อมูลยืนยัน...แต่...ควรเฝ้าระวัง" when no real alert exists; daily_actions = 3-5 concrete actions for today, most important first. If "Days until expected harvest" is given, factor the growth stage (early growth / approaching harvest / pre-harvest) into your advice using that exact number — never estimate a different one.`
+    : `No crop is set on this zone (or no zone context is available) — return empty arrays for every crop_advisory field. Do not guess what crop might be planted.`;
+
   const system = `${BASE_RULES}
 
 ${scope}
 
-Respond with a JSON object matching the required schema: summary (1-2 sentences), status ("good"|"attention"|"critical" — critical only for something a farmer should act on soon), insights (array of short bullet strings), anomalies (array, empty if none observed), recommendations (array — combine sensor + weather + general knowledge, e.g. irrigation timing given the rain forecast, empty if nothing actionable), metrics (array of {label, value} — the key numbers you based this on, e.g. {label:"Temperature avg", value:"31.4°C"}).`;
+${cropRule}
 
-  const user = `DATA:\n${formatContextBlock(contexts)}${formatWeatherBlock(weather)}\n\nAnalyze this data and produce the structured result.`;
+Respond with a JSON object matching the required schema: summary (1-2 sentences), status ("good"|"attention"|"critical" — critical only for something a farmer should act on soon), insights (array of short bullet strings), anomalies (array, empty if none observed), recommendations (array — combine sensor + weather + general knowledge, e.g. irrigation timing given the rain forecast, empty if nothing actionable), metrics (array of {label, value} — the key numbers you based this on, e.g. {label:"Temperature avg", value:"31.4°C"}), crop_advisory (object per the rule above).`;
+
+  const user = `DATA:\n${formatContextBlock(contexts)}${formatWeatherBlock(weather)}${formatZoneBlock(zone)}\n\nAnalyze this data and produce the structured result.`;
 
   return { system, user };
 }
@@ -95,7 +127,8 @@ Respond with a JSON object matching the required schema: summary (1-2 sentences)
 export function buildChatSystemPrompt(
   contexts: DeviceAiContext[],
   advanced: boolean,
-  weather: WeatherPromptContext | null = null
+  weather: WeatherPromptContext | null = null,
+  zone: ZonePromptContext | null = null
 ): string {
   const scope = advanced
     ? "The user may ask about any of the devices listed below, or ask you to compare them."
@@ -105,10 +138,10 @@ export function buildChatSystemPrompt(
 
 ${scope}
 
-This is a conversational assistant — the user can ask general farming questions, weather questions, sensor-specific questions, or any mix, and can follow up naturally (e.g. "กะหล่ำปลีควรปลูกช่วงไหน?" → "แล้วอุณหภูมิในแปลงผมตอนนี้เป็นอย่างไร?" → "พรุ่งนี้ฝนตกไหม?"). Don't force every question to be about a sensor reading.
+This is a conversational assistant — the user can ask general farming questions, weather questions, sensor-specific questions, or any mix, and can follow up naturally (e.g. "กะหล่ำปลีควรปลูกช่วงไหน?" → "แล้วอุณหภูมิในแปลงผมตอนนี้เป็นอย่างไร?" → "พรุ่งนี้ฝนตกไหม?"). Don't force every question to be about a sensor reading. If a ZONE block below names a real crop, tailor your answers to that crop specifically when relevant — but never claim a crop is planted if no ZONE block is given.
 
 DATA:
-${formatContextBlock(contexts)}${formatWeatherBlock(weather)}
+${formatContextBlock(contexts)}${formatWeatherBlock(weather)}${formatZoneBlock(zone)}
 
-Respond with a JSON object: answer (the response in Thai, concise, natural — combine DATA/WEATHER with general agricultural knowledge as needed to actually help), supporting_data (array of short strings citing which numbers from DATA/WEATHER you used — empty array when the question was general/didn't need a specific reading).`;
+Respond with a JSON object: answer (the response in Thai, concise, natural — combine DATA/WEATHER/ZONE with general agricultural knowledge as needed to actually help), supporting_data (array of short strings citing which numbers from DATA/WEATHER you used — empty array when the question was general/didn't need a specific reading).`;
 }

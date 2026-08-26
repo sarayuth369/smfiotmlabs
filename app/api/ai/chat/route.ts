@@ -6,8 +6,14 @@ import { getDeviceAiContext, getFarmAiContext } from "@/lib/ai/context";
 import { buildChatSystemPrompt } from "@/lib/ai/prompt";
 import { AIService, friendlyAiError, type AiChatTurn } from "@/lib/ai";
 import { checkAiQuota, logAiRequest } from "@/lib/ai/quota";
-import { getFarmIdForDevice } from "@/lib/farm-location";
+import { getFarmIdForDevice, getZoneForDevice, getPrimaryZoneForFarm, daysUntil, type ZoneInfo } from "@/lib/farm-location";
 import { getWeatherPromptContext } from "@/lib/weather";
+import type { ZonePromptContext } from "@/lib/ai/prompt";
+
+function toZonePromptContext(zone: ZoneInfo | null): ZonePromptContext | null {
+  if (!zone) return null;
+  return { zone, daysToHarvest: daysUntil(zone.expected_harvest_date) };
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,8 +88,14 @@ export async function POST(req: Request) {
 
     const farmId = scope === "device" && body.device_id ? await getFarmIdForDevice(supabase, user.id, body.device_id) : (body.farm_id ?? null);
     const weather = await getWeatherPromptContext(supabase, admin, user.id, farmId);
+    const zone =
+      scope === "device" && body.device_id
+        ? await getZoneForDevice(supabase, user.id, body.device_id)
+        : farmId
+          ? await getPrimaryZoneForFarm(supabase, user.id, farmId)
+          : null;
 
-    const system = buildChatSystemPrompt(contexts, advanced, weather);
+    const system = buildChatSystemPrompt(contexts, advanced, weather, toZonePromptContext(zone));
     const { result, providerId, model } = await AIService.chat(system, history, question);
 
     await logAiRequest(admin, {

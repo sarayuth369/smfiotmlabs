@@ -44,6 +44,28 @@ const RISK_STYLE: Record<string, { badge: string; card: string; icon: string }> 
   warning: { badge: "bg-red-100 text-red-800", card: "border-red-300 bg-red-50/70", icon: "🚨" },
 };
 
+export type ZoneSummary = {
+  id: string;
+  name: string;
+  crop_type: string | null;
+  planting_date: string | null;
+  expected_harvest_date: string | null;
+  days_to_harvest: number | null;
+};
+
+export type CropAdvisory = {
+  environment_notes: string[];
+  watch_items: string[];
+  pest_disease_notes: string[];
+  daily_actions: string[];
+};
+
+const STATUS_STYLE: Record<string, { badge: string; card: string; label: string }> = {
+  good: { badge: "bg-green-100 text-green-800", card: "border-green-200", label: "🟢 ปกติ" },
+  attention: { badge: "bg-amber-100 text-amber-800", card: "border-amber-200", label: "🟡 ควรเฝ้าระวัง" },
+  critical: { badge: "bg-red-100 text-red-800", card: "border-red-300", label: "🔴 ควรดำเนินการ" },
+};
+
 const DAY_LABELS = ["วันนี้", "พรุ่งนี้"];
 
 function formatDayLabel(dateStr: string, idx: number): string {
@@ -52,7 +74,19 @@ function formatDayLabel(dateStr: string, idx: number): string {
   return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 }
 
-export function FarmWeatherSection({ farmId }: { farmId: string }) {
+export function FarmWeatherSection({
+  farmId,
+  zone,
+  status,
+  cropAdvisory,
+  advisoryLoading,
+}: {
+  farmId: string;
+  zone?: ZoneSummary | null;
+  status?: "good" | "attention" | "critical";
+  cropAdvisory?: CropAdvisory | null;
+  advisoryLoading?: boolean;
+}) {
   const [data, setData] = useState<WeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,6 +237,93 @@ export function FarmWeatherSection({ farmId }: { farmId: string }) {
               ))}
             </div>
           </div>
+
+          {/* Crop-specific advisory */}
+          {!zone || !zone.crop_type ? (
+            <div className="card p-5">
+              <h3 className="text-sm font-bold text-brand-800 mb-1">🌱 คำแนะนำเกษตรสำหรับแปลง</h3>
+              <p className="text-sm text-brand-900/50">ยังไม่ได้ระบุพืชในแปลงนี้</p>
+            </div>
+          ) : advisoryLoading && !cropAdvisory ? (
+            <div className="card p-5">
+              <h3 className="text-sm font-bold text-brand-800 mb-1">🌱 คำแนะนำเกษตรสำหรับแปลง</h3>
+              <div className="h-16 flex items-center justify-center text-sm text-brand-900/40">กำลังวิเคราะห์...</div>
+            </div>
+          ) : cropAdvisory ? (
+            <div className={`card p-5 ${status ? STATUS_STYLE[status].card : "border-border"}`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-brand-800">🌱 คำแนะนำเกษตรสำหรับแปลง</h3>
+                  <div className="text-xs text-brand-900/60 mt-0.5">
+                    {zone.crop_type} · {zone.name}
+                    {zone.days_to_harvest !== null &&
+                      (zone.days_to_harvest >= 0
+                        ? ` · เก็บเกี่ยวประมาณ ${zone.days_to_harvest} วัน`
+                        : ` · เลยกำหนดเก็บเกี่ยว ${Math.abs(zone.days_to_harvest)} วัน`)}
+                  </div>
+                </div>
+                {status && (
+                  <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_STYLE[status].badge}`}>
+                    {STATUS_STYLE[status].label}
+                  </span>
+                )}
+              </div>
+
+              {cropAdvisory.environment_notes.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-bold text-brand-900/70 mb-1">🌡 สภาพแวดล้อม</div>
+                  <ul className="space-y-1 text-sm text-brand-900/85">
+                    {cropAdvisory.environment_notes.map((s, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-brand-400">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {cropAdvisory.watch_items.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-bold text-amber-800 mb-1">⚠️ สิ่งที่ควรระวัง</div>
+                  <ul className="space-y-1 text-sm text-amber-900/85">
+                    {cropAdvisory.watch_items.map((s, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-amber-500">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {cropAdvisory.pest_disease_notes.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-bold text-brand-900/70 mb-1">🐛 โรคและแมลงที่ควรเฝ้าระวัง</div>
+                  <ul className="space-y-1 text-sm text-brand-900/85">
+                    {cropAdvisory.pest_disease_notes.map((s, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-brand-400">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-[10px] text-brand-900/40">ประเมินจากสภาพอากาศ+ความรู้ทั่วไป ไม่ใช่ข่าวการระบาดจริง เว้นแต่ระบุแหล่งที่มา</p>
+                </div>
+              )}
+
+              {cropAdvisory.daily_actions.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-brand-900/70 mb-1">📋 สิ่งที่ควรทำวันนี้</div>
+                  <ol className="space-y-1 text-sm text-brand-900/85 list-decimal pl-4">
+                    {cropAdvisory.daily_actions.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {/* Flood / water risk */}
           {data.flood_risk && (

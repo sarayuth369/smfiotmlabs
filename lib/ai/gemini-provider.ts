@@ -15,7 +15,7 @@ import { AiProviderError } from "./types";
 // Route handlers set maxDuration to give Vercel's own platform timeout
 // enough headroom above this.
 const TIMEOUT_MS = 55_000;
-const MAX_OUTPUT_TOKENS = 800;
+const MAX_OUTPUT_TOKENS = 1100;
 
 const ANALYSIS_SCHEMA = {
   type: "OBJECT",
@@ -33,8 +33,18 @@ const ANALYSIS_SCHEMA = {
         required: ["label", "value"],
       },
     },
+    crop_advisory: {
+      type: "OBJECT",
+      properties: {
+        environment_notes: { type: "ARRAY", items: { type: "STRING" } },
+        watch_items: { type: "ARRAY", items: { type: "STRING" } },
+        pest_disease_notes: { type: "ARRAY", items: { type: "STRING" } },
+        daily_actions: { type: "ARRAY", items: { type: "STRING" } },
+      },
+      required: ["environment_notes", "watch_items", "pest_disease_notes", "daily_actions"],
+    },
   },
-  required: ["summary", "status", "insights", "anomalies", "recommendations", "metrics"],
+  required: ["summary", "status", "insights", "anomalies", "recommendations", "metrics", "crop_advisory"],
 };
 
 const CHAT_SCHEMA = {

@@ -6,8 +6,26 @@ import { getDeviceAiContext, getFarmAiContext } from "@/lib/ai/context";
 import { buildAnalysisPrompt } from "@/lib/ai/prompt";
 import { AIService, friendlyAiError } from "@/lib/ai";
 import { checkAiQuota, logAiRequest, findCachedAnalysis } from "@/lib/ai/quota";
-import { getFarmIdForDevice } from "@/lib/farm-location";
+import { getFarmIdForDevice, getZoneForDevice, getPrimaryZoneForFarm, daysUntil, type ZoneInfo } from "@/lib/farm-location";
 import { getWeatherPromptContext } from "@/lib/weather";
+import type { ZonePromptContext } from "@/lib/ai/prompt";
+
+function toZoneSummary(zone: ZoneInfo | null) {
+  if (!zone) return null;
+  return {
+    id: zone.id,
+    name: zone.name,
+    crop_type: zone.crop_type,
+    planting_date: zone.planting_date,
+    expected_harvest_date: zone.expected_harvest_date,
+    days_to_harvest: daysUntil(zone.expected_harvest_date),
+  };
+}
+
+function toZonePromptContext(zone: ZoneInfo | null): ZonePromptContext | null {
+  if (!zone) return null;
+  return { zone, daysToHarvest: daysUntil(zone.expected_harvest_date) };
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +66,9 @@ export async function POST(req: Request) {
 
       const cached = await findCachedAnalysis(admin, user.id, body.device_id, periodDays);
       if (cached) {
-        return NextResponse.json({ ...cached.result, cached: true, provider: cached.provider, model: cached.model });
+        // Zone is a cheap direct DB read (no AI call) — always resolve fresh so the header never shows stale crop/harvest data even on a cache hit.
+        const cachedZone = await getZoneForDevice(supabase, user.id, body.device_id);
+        return NextResponse.json({ ...cached.result, cached: true, provider: cached.provider, model: cached.model, zone: toZoneSummary(cachedZone) });
       }
 
       const quota = await checkAiQuota(admin, user.id, "analyze", plan.limits.max_ai_analyses_per_month);
@@ -63,12 +83,13 @@ export async function POST(req: Request) {
 
       const farmId = await getFarmIdForDevice(supabase, user.id, body.device_id);
       const weather = await getWeatherPromptContext(supabase, admin, user.id, farmId);
+      const zone = await getZoneForDevice(supabase, user.id, body.device_id);
 
-      const { system, user: userPrompt } = buildAnalysisPrompt([context], advanced, weather);
+      const { system, user: userPrompt } = buildAnalysisPrompt([context], advanced, weather, toZonePromptContext(zone));
       const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
       await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: body.device_id, period_days: periodDays, ok: true, result });
-      return NextResponse.json({ ...result, cached: false, provider: providerId, model });
+      return NextResponse.json({ ...result, cached: false, provider: providerId, model, zone: toZoneSummary(zone) });
     }
 
     // scope === "farm" (Business/Premium multi-device)
@@ -85,12 +106,13 @@ export async function POST(req: Request) {
     }
 
     const weather = await getWeatherPromptContext(supabase, admin, user.id, body.farm_id);
+    const zone = await getPrimaryZoneForFarm(supabase, user.id, body.farm_id);
 
-    const { system, user: userPrompt } = buildAnalysisPrompt(contexts, advanced, weather);
+    const { system, user: userPrompt } = buildAnalysisPrompt(contexts, advanced, weather, toZonePromptContext(zone));
     const { result, providerId, model } = await AIService.analyze(system, userPrompt);
 
     await logAiRequest(admin, { user_id: user.id, kind: "analyze", provider: providerId, model, device_id: null, period_days: periodDays, ok: true, result });
-    return NextResponse.json({ ...result, cached: false, provider: providerId, model });
+    return NextResponse.json({ ...result, cached: false, provider: providerId, model, zone: toZoneSummary(zone) });
   } catch (e) {
     await logAiRequest(admin, {
       user_id: user.id,

@@ -8,7 +8,7 @@ import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./t
 import { AiProviderError } from "./types";
 
 const TIMEOUT_MS = 55_000; // kept symmetric with gemini-provider.ts's timeout
-const MAX_OUTPUT_TOKENS = 800;
+const MAX_OUTPUT_TOKENS = 1100;
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 const ANALYSIS_JSON_SCHEMA = {
@@ -30,8 +30,19 @@ const ANALYSIS_JSON_SCHEMA = {
           additionalProperties: false,
         },
       },
+      crop_advisory: {
+        type: "object",
+        properties: {
+          environment_notes: { type: "array", items: { type: "string" } },
+          watch_items: { type: "array", items: { type: "string" } },
+          pest_disease_notes: { type: "array", items: { type: "string" } },
+          daily_actions: { type: "array", items: { type: "string" } },
+        },
+        required: ["environment_notes", "watch_items", "pest_disease_notes", "daily_actions"],
+        additionalProperties: false,
+      },
     },
-    required: ["summary", "status", "insights", "anomalies", "recommendations", "metrics"],
+    required: ["summary", "status", "insights", "anomalies", "recommendations", "metrics", "crop_advisory"],
     additionalProperties: false,
   },
   strict: true,

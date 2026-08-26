@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FarmWeatherSection } from "./FarmWeatherSection";
+import { FarmWeatherSection, type ZoneSummary, type CropAdvisory } from "./FarmWeatherSection";
 
 type Farm = { id: string; name: string };
 type Device = { id: string; device_name: string; farm_id: string };
@@ -13,6 +13,8 @@ type AnalysisResult = {
   anomalies: string[];
   recommendations: string[];
   metrics: { label: string; value: string }[];
+  crop_advisory: CropAdvisory;
+  zone: ZoneSummary | null;
   cached?: boolean;
 };
 
@@ -138,7 +140,16 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
 
   return (
     <div className="space-y-5">
-      {currentFarmId && <FarmWeatherSection key={currentFarmId} farmId={currentFarmId} />}
+      {currentFarmId && (
+        <FarmWeatherSection
+          key={currentFarmId}
+          farmId={currentFarmId}
+          zone={result?.zone}
+          status={result?.status}
+          cropAdvisory={result?.crop_advisory}
+          advisoryLoading={loading}
+        />
+      )}
 
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-3">
