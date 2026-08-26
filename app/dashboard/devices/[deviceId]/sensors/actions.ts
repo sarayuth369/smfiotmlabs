@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateSensor } from "@/lib/plan-limits";
-import { isValidSensorType } from "@/lib/sensor-types";
+import { canCreateSensor, getUserPlan } from "@/lib/plan-limits";
+import {
+  getSensorTypeCatalog,
+  isValidSensorTypeFrom,
+  visibleSensorTypesForPlan,
+  type SensorTypeInfo,
+} from "@/lib/sensor-types";
 
 const HISTORY_INTERVALS = [5, 10, 15, 30, 60] as const;
 
@@ -32,7 +37,7 @@ async function requireOwnedDevice(
   }
 }
 
-function parseSensorFields(fd: FormData) {
+function parseSensorFields(fd: FormData, catalog: SensorTypeInfo[]) {
   const name = String(fd.get("name") ?? "").trim();
   const sensor_type = String(fd.get("sensor_type") ?? "").trim();
   const unit = String(fd.get("unit") ?? "").trim() || null;
@@ -42,7 +47,7 @@ function parseSensorFields(fd: FormData) {
   const status: Status = isValidStatus(statusRaw) ? statusRaw : "active";
 
   if (!name) throw new Error("กรุณากรอกชื่อ Sensor");
-  if (!isValidSensorType(sensor_type)) throw new Error("Sensor Type ไม่ถูกต้อง");
+  if (!isValidSensorTypeFrom(catalog, sensor_type)) throw new Error("Sensor Type ไม่ถูกต้อง");
 
   return { name, sensor_type, unit, description, channel, status };
 }
@@ -59,7 +64,17 @@ export async function createSensor(deviceId: string, formData: FormData): Promis
   const check = await canCreateSensor(supabase, user.id);
   if (!check.ok) throw new Error(check.reason ?? "เกินโควตาแพ็กเกจ");
 
-  const fields = parseSensorFields(formData);
+  const [catalog, plan] = await Promise.all([getSensorTypeCatalog(supabase), getUserPlan(supabase, user.id)]);
+  const fields = parseSensorFields(formData, catalog);
+
+  // Defense in depth — the "เพิ่ม Sensor" dialog only ever shows the
+  // plan-visible slice of the catalog, but a Server Action's form fields
+  // are still client-suppliable, so re-check the type wasn't chosen from
+  // beyond what this plan is allowed to pick.
+  const visible = visibleSensorTypesForPlan(catalog, plan.limits.max_sensors);
+  if (!visible.some((t) => t.key === fields.sensor_type)) {
+    throw new Error(`แพ็กเกจ ${plan.name} ยังไม่รองรับ Sensor ประเภทนี้ — อัปเกรดแพ็กเกจเพื่อเปิดใช้งาน`);
+  }
 
   const { data, error } = await supabase
     .from("sensors")
@@ -91,7 +106,8 @@ export async function updateSensor(
 
   await requireOwnedDevice(supabase, user.id, deviceId);
 
-  const fields = parseSensorFields(formData);
+  const catalog = await getSensorTypeCatalog(supabase);
+  const fields = parseSensorFields(formData, catalog);
   const { error } = await supabase
     .from("sensors")
     .update(fields)

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateSensor } from "@/lib/plan-limits";
+import { canCreateSensor, getUserPlan } from "@/lib/plan-limits";
+import { getSensorTypeCatalog, visibleSensorTypesForPlan } from "@/lib/sensor-types";
 import { SensorForm, type SensorFormValues } from "../../_components/SensorForm";
 import { updateSensor } from "../../actions";
 import {
@@ -38,7 +39,19 @@ export default async function EditSensorPage({
   const initial = data as unknown as SensorFormValues & { archived_at: string | null; name: string };
   const isArchived = !!initial.archived_at;
   const bound = updateSensor.bind(null, deviceId, sensorId);
-  const check = isArchived ? await canCreateSensor(supabase, user!.id) : null;
+  const [check, catalog, plan] = await Promise.all([
+    isArchived ? canCreateSensor(supabase, user!.id) : Promise.resolve(null),
+    getSensorTypeCatalog(supabase),
+    getUserPlan(supabase, user!.id),
+  ]);
+  // Edit dropdown = plan's visible slice, but ALWAYS includes the sensor's
+  // current type even if it now falls outside that slice (e.g. plan was
+  // downgraded after this sensor was created) — editing other fields must
+  // never force the user off a type they already legitimately have.
+  const visible = visibleSensorTypesForPlan(catalog, plan.limits.max_sensors);
+  const currentType = catalog.find((t) => t.key === initial.sensor_type);
+  const editTypes =
+    currentType && !visible.some((t) => t.key === currentType.key) ? [...visible, currentType] : visible;
 
   return (
     <div className="max-w-3xl">
@@ -75,6 +88,7 @@ export default async function EditSensorPage({
           initial={initial}
           submitLabel="บันทึกการเปลี่ยนแปลง"
           cancelHref={`/dashboard/devices/${deviceId}/sensors/${sensorId}`}
+          sensorTypes={editTypes}
         />
 
         <div className="card p-6 border-red-200 space-y-4">

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canCreateSensor } from "@/lib/plan-limits";
+import { canCreateSensor, getUserPlan } from "@/lib/plan-limits";
+import { getSensorTypeCatalog, visibleSensorTypesForPlan } from "@/lib/sensor-types";
 import { SensorForm } from "../_components/SensorForm";
 import { PlanLimitNotice } from "../../../../farms/_components/PlanLimitNotice";
 import { createSensor } from "../actions";
@@ -26,7 +27,12 @@ export default async function NewSensorPage({
   const ownerId = Array.isArray(farmRel) ? farmRel[0]?.user_id : farmRel?.user_id;
   if (!device || ownerId !== user!.id) notFound();
 
-  const check = await canCreateSensor(supabase, user!.id);
+  const [check, catalog, plan] = await Promise.all([
+    canCreateSensor(supabase, user!.id),
+    getSensorTypeCatalog(supabase),
+    getUserPlan(supabase, user!.id),
+  ]);
+  const visibleTypes = visibleSensorTypesForPlan(catalog, plan.limits.max_sensors);
   const bound = createSensor.bind(null, deviceId);
 
   return (
@@ -44,11 +50,23 @@ export default async function NewSensorPage({
 
       <div className="mt-6">
         {check.ok ? (
-          <SensorForm
-            action={bound}
-            submitLabel="เพิ่ม Sensor"
-            cancelHref={`/dashboard/devices/${deviceId}`}
-          />
+          <div className="space-y-3">
+            {visibleTypes.length < catalog.length && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+                แพ็กเกจ {plan.name} เลือกได้ {visibleTypes.length} ประเภทจากทั้งหมด {catalog.length} ประเภท —{" "}
+                <Link href="/pricing" className="font-semibold underline">
+                  อัปเกรดแพ็กเกจ
+                </Link>{" "}
+                เพื่อปลดล็อกประเภทอื่น
+              </div>
+            )}
+            <SensorForm
+              action={bound}
+              submitLabel="เพิ่ม Sensor"
+              cancelHref={`/dashboard/devices/${deviceId}`}
+              sensorTypes={visibleTypes}
+            />
+          </div>
         ) : (
           <div className="space-y-4">
             <PlanLimitNotice

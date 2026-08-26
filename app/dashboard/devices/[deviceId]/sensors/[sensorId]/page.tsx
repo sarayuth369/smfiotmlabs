@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
-import { SENSOR_TYPES, isValidSensorType, sensorTypeLabel, sensorTypeIcon } from "@/lib/sensor-types";
+import { getSensorTypeCatalog, sensorTypeLabelFrom, sensorTypeIconFrom, defaultUnitFrom } from "@/lib/sensor-types";
 import { LiveSensorValue } from "../../_components/LiveSensorValue";
 import { SensorHistorySection } from "./_components/SensorHistorySection";
 import { getSensorHistorySummary } from "./history-actions";
@@ -71,9 +71,10 @@ export default async function SensorDetailPage({
   const zone = Array.isArray(device.zones) ? device.zones[0] : device.zones;
 
   const isArchived = !!raw.archived_at;
-  const typeIcon = sensorTypeIcon(raw.sensor_type);
-  const typeLabel = sensorTypeLabel(raw.sensor_type);
-  const unit = raw.unit ?? (isValidSensorType(raw.sensor_type) ? SENSOR_TYPES[raw.sensor_type].unit : "-");
+  const sensorTypeCatalog = await getSensorTypeCatalog(supabase);
+  const typeIcon = sensorTypeIconFrom(sensorTypeCatalog, raw.sensor_type);
+  const typeLabel = sensorTypeLabelFrom(sensorTypeCatalog, raw.sensor_type);
+  const unit = raw.unit ?? (defaultUnitFrom(sensorTypeCatalog, raw.sensor_type) || "-");
 
   const historySummary = await getSensorHistorySummary(deviceId, sensorId);
 

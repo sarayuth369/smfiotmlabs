@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { href: "/admin/members", label: "Users Management", mod: "members" },
   { href: "/admin/devices", label: "IoT Devices", mod: "devices" },
   { href: "/admin/firmware", label: "Firmware", mod: "firmware" },
+  { href: "/admin/sensors", label: "Sensors", mod: "sensors" },
   { href: "/admin/mqtt", label: "MQTT / Bridge", mod: "mqtt" },
   { href: "/admin/notifications", label: "Notifications", mod: "notifications" },
   { href: "/admin/pricing", label: "Subscription Plans", mod: "pricing" },
@@ -30,7 +31,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
     <div className="min-h-screen bg-[var(--surface-alt)] flex">
       {/* Sidebar */}
       <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 bg-brand-900 text-white sticky top-0 h-screen">
-        <div className="px-6 py-5 border-b border-white/10">
+        <div className="px-6 py-5 border-b border-white/10 shrink-0">
           <Link href="/admin/dashboard" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center font-black text-lg">A</div>
             <div className="leading-tight">
@@ -40,7 +41,10 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        {/* min-h-0 lets this flex child actually shrink and scroll instead
+            of pushing the account block below the viewport as more nav
+            items get added over time. */}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 pb-6 space-y-1">
           {NAV.filter((n) => canAccess(session.role, n.mod)).map((n) => (
             <Link
               key={n.href}
@@ -52,7 +56,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
           ))}
         </nav>
 
-        <div className="px-4 py-4 border-t border-white/10 text-xs text-white/60">
+        <div className="px-4 py-4 border-t border-white/10 text-xs text-white/60 shrink-0">
           <div className="font-semibold text-white/85">{session.username}</div>
           <div className="mt-0.5">{ROLE_LABEL[session.role]}</div>
         </div>

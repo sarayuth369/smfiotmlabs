@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { canCreateSensor } from "@/lib/plan-limits";
-import { sensorTypeIcon, sensorTypeLabel } from "@/lib/sensor-types";
+import { getSensorTypeCatalog, sensorTypeIconFrom, sensorTypeLabelFrom } from "@/lib/sensor-types";
 import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
 import { LiveSensorValue } from "./_components/LiveSensorValue";
 
@@ -92,7 +92,7 @@ export default async function DeviceDetailPage({
   const isArchived = !!raw.archived_at;
 
   // Fetch sensors + plan check in parallel
-  const [{ data: sensorsData }, sensorCheck, archivedSensorRes] = await Promise.all([
+  const [{ data: sensorsData }, sensorCheck, archivedSensorRes, sensorTypeCatalog] = await Promise.all([
     supabase
       .from("sensors")
       .select("id, name, sensor_type, unit, channel, status, archived_at")
@@ -105,6 +105,7 @@ export default async function DeviceDetailPage({
       .select("id", { count: "exact", head: true })
       .eq("device_id", deviceId)
       .not("archived_at", "is", null),
+    getSensorTypeCatalog(supabase),
   ]);
   const sensors = (sensorsData ?? []) as {
     id: string;
@@ -275,7 +276,7 @@ export default async function DeviceDetailPage({
                   return (
                     <div key={s.id} className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
                       <div className="text-xs font-semibold text-brand-900/60">
-                        {sensorTypeIcon(s.sensor_type)} {sensorTypeLabel(s.sensor_type)}
+                        {sensorTypeIconFrom(sensorTypeCatalog, s.sensor_type)} {sensorTypeLabelFrom(sensorTypeCatalog, s.sensor_type)}
                         {s.channel && <span className="ml-1 font-mono text-[10px]">Ch:{s.channel}</span>}
                       </div>
                       <LiveSensorValue
@@ -381,10 +382,10 @@ export default async function DeviceDetailPage({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-semibold text-brand-800 truncate">
-                      {sensorTypeIcon(s.sensor_type)} {s.name}
+                      {sensorTypeIconFrom(sensorTypeCatalog, s.sensor_type)} {s.name}
                     </div>
                     <div className="text-xs text-brand-900/55 mt-0.5">
-                      {sensorTypeLabel(s.sensor_type)}
+                      {sensorTypeLabelFrom(sensorTypeCatalog, s.sensor_type)}
                       {s.unit && ` • ${s.unit}`}
                       {s.channel && ` • Ch: ${s.channel}`}
                     </div>

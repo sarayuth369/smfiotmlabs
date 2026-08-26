@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { SENSOR_TYPES, defaultUnit, type SensorType } from "@/lib/sensor-types";
+import { defaultUnitFrom, type SensorTypeInfo } from "@/lib/sensor-types";
 
 export type SensorFormValues = {
   name?: string;
@@ -18,23 +18,28 @@ export function SensorForm({
   initial,
   submitLabel,
   cancelHref,
+  sensorTypes,
 }: {
   action: (formData: FormData) => Promise<void>;
   initial?: SensorFormValues;
   submitLabel: string;
   cancelHref: string;
+  sensorTypes: SensorTypeInfo[];
 }) {
   const v = initial ?? {};
-  const [type, setType] = useState<SensorType | "">(
-    (v.sensor_type as SensorType) || "temperature"
-  );
-  const [unit, setUnit] = useState<string>(v.unit ?? defaultUnit(type || "temperature"));
+  const firstType = sensorTypes[0]?.key ?? "";
+  const [type, setType] = useState<string>(v.sensor_type || firstType);
+  const [unit, setUnit] = useState<string>(v.unit ?? defaultUnitFrom(sensorTypes, type || firstType));
 
-  const onTypeChange = (t: SensorType) => {
+  const onTypeChange = (t: string) => {
     setType(t);
     // Overwrite unit only if user hasn't customized (unit still matches previous default)
-    if (unit === defaultUnit(v.sensor_type ?? "") || unit === "" || unit === defaultUnit(type || "")) {
-      setUnit(defaultUnit(t));
+    if (
+      unit === defaultUnitFrom(sensorTypes, v.sensor_type ?? "") ||
+      unit === "" ||
+      unit === defaultUnitFrom(sensorTypes, type || "")
+    ) {
+      setUnit(defaultUnitFrom(sensorTypes, t));
     }
   };
 
@@ -64,12 +69,12 @@ export function SensorForm({
             name="sensor_type"
             required
             value={type}
-            onChange={(e) => onTypeChange(e.target.value as SensorType)}
+            onChange={(e) => onTypeChange(e.target.value)}
             className="w-full rounded-xl border border-border bg-white px-4 py-2.5 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition"
           >
-            {(Object.keys(SENSOR_TYPES) as SensorType[]).map((k) => (
-              <option key={k} value={k}>
-                {SENSOR_TYPES[k].icon} {SENSOR_TYPES[k].label}
+            {sensorTypes.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.icon} {t.label}
               </option>
             ))}
           </select>
@@ -83,11 +88,11 @@ export function SensorForm({
             name="unit"
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
-            placeholder={defaultUnit(type || "")}
+            placeholder={defaultUnitFrom(sensorTypes, type || "")}
             className="w-full rounded-xl border border-border bg-white px-4 py-2.5 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition"
           />
           <p className="mt-1 text-xs text-brand-900/50">
-            Default: {defaultUnit(type || "") || "-"} — แก้ได้ตามรุ่นเซนเซอร์
+            Default: {defaultUnitFrom(sensorTypes, type || "") || "-"} — แก้ได้ตามรุ่นเซนเซอร์
           </p>
         </div>
       </div>
