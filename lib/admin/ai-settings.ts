@@ -18,12 +18,16 @@ export type AiConfig = {
   openai_model: string;
 };
 
+// Seed defaults only — once the admin saves a config row in system_settings,
+// that DB value wins from then on (see getAiConfig below). GEMINI_MODEL /
+// OPENAI_MODEL env vars just set the starting point before anyone has
+// touched Admin > AI Analysis yet.
 const DEFAULT_AI_CONFIG: AiConfig = {
   default_provider: "gemini",
   gemini_enabled: true,
-  gemini_model: "gemini-2.5-flash-lite",
+  gemini_model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
   openai_enabled: false,
-  openai_model: "gpt-4o-mini",
+  openai_model: process.env.OPENAI_MODEL || "gpt-4o-mini",
 };
 
 export async function getAiConfig(): Promise<AiConfig> {

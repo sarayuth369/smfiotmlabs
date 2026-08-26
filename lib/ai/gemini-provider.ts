@@ -59,7 +59,7 @@ async function callGemini(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },
         contents,
         generationConfig: {
           responseMimeType: "application/json",
@@ -70,23 +70,41 @@ async function callGemini(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
+  } catch (e) {
+    // Log the exception itself (never the key — it's only ever in the
+    // request URL, never in this error object) — otherwise a runtime-level
+    // failure (e.g. AbortSignal.timeout unsupported, DNS, TLS) is
+    // indistinguishable from "no key configured" and impossible to debug.
+    console.warn("[ai.gemini] fetch threw", e instanceof Error ? `${e.name}: ${e.message}` : String(e));
     throw new AiProviderError("Gemini request failed", "unavailable");
   }
 
   if (!res.ok) {
-    // Never surface the raw provider error body (may echo request details) — log server-side only.
-    console.warn("[ai.gemini] non-200 response", res.status);
+    // Body is Google's own error description (e.g. "model not found",
+    // "API key not valid") — never anything we sent, so safe to log.
+    const bodyText = await res.text().catch(() => "");
+    console.warn("[ai.gemini] non-200 response", res.status, bodyText.slice(0, 500));
     throw new AiProviderError("Gemini provider error", "provider_error");
   }
 
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") throw new AiProviderError("Gemini returned no content", "invalid_response");
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch (e) {
+    console.warn("[ai.gemini] response body was not JSON", e instanceof Error ? e.message : String(e));
+    throw new AiProviderError("Gemini returned invalid response", "invalid_response");
+  }
+
+  const text = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") {
+    console.warn("[ai.gemini] no text in response", JSON.stringify(data).slice(0, 500));
+    throw new AiProviderError("Gemini returned no content", "invalid_response");
+  }
 
   try {
     return JSON.parse(text);
   } catch {
+    console.warn("[ai.gemini] candidate text was not valid JSON", text.slice(0, 300));
     throw new AiProviderError("Gemini returned invalid JSON", "invalid_response");
   }
 }
