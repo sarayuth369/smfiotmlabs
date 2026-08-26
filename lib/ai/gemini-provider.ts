@@ -1,0 +1,111 @@
+/**
+ * Gemini provider — plain REST fetch (no SDK dependency added). Uses
+ * responseMimeType: "application/json" + responseSchema so the model
+ * itself returns the exact shape we need — no markdown/regex parsing.
+ * Single attempt, no retry loop, bounded output tokens (cost control).
+ */
+
+import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./types";
+import { AiProviderError } from "./types";
+
+const TIMEOUT_MS = 20_000;
+const MAX_OUTPUT_TOKENS = 800;
+
+const ANALYSIS_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    summary: { type: "STRING" },
+    status: { type: "STRING", enum: ["good", "attention", "critical"] },
+    insights: { type: "ARRAY", items: { type: "STRING" } },
+    anomalies: { type: "ARRAY", items: { type: "STRING" } },
+    recommendations: { type: "ARRAY", items: { type: "STRING" } },
+    metrics: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { label: { type: "STRING" }, value: { type: "STRING" } },
+        required: ["label", "value"],
+      },
+    },
+  },
+  required: ["summary", "status", "insights", "anomalies", "recommendations", "metrics"],
+};
+
+const CHAT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    answer: { type: "STRING" },
+    supporting_data: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["answer", "supporting_data"],
+};
+
+function endpoint(model: string): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
+
+async function callGemini(
+  model: string,
+  systemPrompt: string,
+  contents: { role: "user" | "model"; parts: { text: string }[] }[],
+  schema: unknown
+): Promise<unknown> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new AiProviderError("Gemini API key not configured", "unavailable");
+
+  let res: Response;
+  try {
+    res = await fetch(`${endpoint(model)}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          temperature: 0.3,
+        },
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {
+    throw new AiProviderError("Gemini request failed", "unavailable");
+  }
+
+  if (!res.ok) {
+    // Never surface the raw provider error body (may echo request details) — log server-side only.
+    console.warn("[ai.gemini] non-200 response", res.status);
+    throw new AiProviderError("Gemini provider error", "provider_error");
+  }
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") throw new AiProviderError("Gemini returned no content", "invalid_response");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AiProviderError("Gemini returned invalid JSON", "invalid_response");
+  }
+}
+
+export class GeminiProvider implements AiProvider {
+  readonly id = "gemini" as const;
+  constructor(private model: string) {}
+
+  async analyze(systemPrompt: string, userPrompt: string): Promise<AiAnalysisResult> {
+    const parsed = await callGemini(this.model, systemPrompt, [{ role: "user", parts: [{ text: userPrompt }] }], ANALYSIS_SCHEMA);
+    return parsed as AiAnalysisResult;
+  }
+
+  async chat(systemPrompt: string, history: AiChatTurn[], question: string): Promise<AiChatResult> {
+    const contents = [
+      ...history.map((h) => ({ role: (h.role === "assistant" ? "model" : "user") as "user" | "model", parts: [{ text: h.content }] })),
+      { role: "user" as const, parts: [{ text: question }] },
+    ];
+    const parsed = await callGemini(this.model, systemPrompt, contents, CHAT_SCHEMA);
+    return parsed as AiChatResult;
+  }
+}

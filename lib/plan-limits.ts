@@ -12,6 +12,8 @@ export type PlanLimits = {
   sensor_history_days: number | null;
   max_api_keys: number | null;
   api_rate_limit_per_min: number | null;
+  max_ai_analyses_per_month: number | null;
+  max_ai_chat_per_month: number | null;
 };
 
 /** Feature-flag map — extend keys freely; unknown keys default to false. */
@@ -28,15 +30,15 @@ export type UserPlan = {
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0 },
-  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60 },
-  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300 },
-  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600 },
+  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0, max_ai_analyses_per_month: 0, max_ai_chat_per_month: 0 },
+  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60, max_ai_analyses_per_month: 30, max_ai_chat_per_month: 60 },
+  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300, max_ai_analyses_per_month: 150, max_ai_chat_per_month: 300 },
+  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600, max_ai_analyses_per_month: null, max_ai_chat_per_month: null },
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: { reports: true, rules: true, sheets_export: true, csv_export: true, api: false, api_control: false },
-  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true, api: true, api_control: false },
+  starter: { reports: true, rules: true, sheets_export: true, csv_export: true, api: false, api_control: false, ai: false, ai_advanced: false },
+  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true, api: true, api_control: false, ai: true, ai_advanced: false },
   business: {
     line_notify: true,
     reports: true,
@@ -47,6 +49,8 @@ const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     rules: true,
     sheets_export: true,
     csv_export: true,
+    ai: true,
+    ai_advanced: true,
   },
   enterprise: {
     line_notify: true,
@@ -58,6 +62,8 @@ const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     rules: true,
     sheets_export: true,
     csv_export: true,
+    ai: true,
+    ai_advanced: true,
   },
 };
 
@@ -90,7 +96,7 @@ export async function getUserPlan(
   const { data: row } = await supabase
     .from("subscription_plans")
     .select(
-      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, entitlements"
+      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, max_ai_analyses_per_month, max_ai_chat_per_month, entitlements"
     )
     .eq("plan_id", planId)
     .maybeSingle();
@@ -123,6 +129,8 @@ export async function getUserPlan(
         : fb.sensor_history_days,
       max_api_keys: row ? (row.max_api_keys as number | null) : fb.max_api_keys,
       api_rate_limit_per_min: row ? (row.api_rate_limit_per_min as number | null) : fb.api_rate_limit_per_min,
+      max_ai_analyses_per_month: row ? (row.max_ai_analyses_per_month as number | null) : fb.max_ai_analyses_per_month,
+      max_ai_chat_per_month: row ? (row.max_ai_chat_per_month as number | null) : fb.max_ai_chat_per_month,
     },
     entitlements,
   };
@@ -144,6 +152,7 @@ export const KNOWN_FEATURES = [
   { key: "rules", label: "Rules" },
   { key: "csv_export", label: "Export CSV" },
   { key: "ai", label: "AI Analysis" },
+  { key: "ai_advanced", label: "AI Analysis (Advanced)" },
   { key: "priority_support", label: "Priority Support" },
 ] as const;
 
