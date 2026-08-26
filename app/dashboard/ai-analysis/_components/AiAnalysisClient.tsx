@@ -61,65 +61,6 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
-  const [voiceOn, setVoiceOn] = useState(false);
-  const [voiceSupported, setVoiceSupported] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    setVoiceSupported(true);
-    setVoiceOn(localStorage.getItem("ai_voice_on") === "1");
-    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }, []);
-
-  // Best matching Thai voice actually installed on this device/browser — setting only
-  // utterance.lang isn't enough, Chrome silently falls back to a default English voice
-  // (garbled/near-silent on Thai script) unless a matching voice object is set explicitly.
-  function pickThaiVoice(): SpeechSynthesisVoice | null {
-    const thai = voices.filter((v) => v.lang.toLowerCase().startsWith("th"));
-    if (thai.length === 0) return null;
-    return thai.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? thai[0];
-  }
-
-  // Chrome/Edge silently stop a single long utterance after roughly 15s of speech —
-  // queue it as several shorter utterances instead (speechSynthesis plays queued
-  // utterances back-to-back automatically).
-  function chunkText(text: string, maxLen = 180): string[] {
-    const parts = text.split(/(\s+)/);
-    const chunks: string[] = [];
-    let current = "";
-    for (const part of parts) {
-      if (current && (current + part).length > maxLen) {
-        chunks.push(current);
-        current = part;
-      } else {
-        current += part;
-      }
-    }
-    if (current.trim()) chunks.push(current);
-    return chunks;
-  }
-
-  function speak(text: string) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const voice = pickThaiVoice();
-    for (const chunk of chunkText(text)) {
-      const utter = new SpeechSynthesisUtterance(chunk);
-      utter.lang = "th-TH";
-      if (voice) utter.voice = voice;
-      window.speechSynthesis.speak(utter);
-    }
-  }
-
-  function toggleVoice() {
-    const next = !voiceOn;
-    setVoiceOn(next);
-    localStorage.setItem("ai_voice_on", next ? "1" : "0");
-    if (!next && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
-  }
 
   function scopeBody() {
     const [kind, id] = selected.split(":");
@@ -180,7 +121,6 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
         return;
       }
       setMessages([...nextMessages, { role: "assistant", content: data.answer }]);
-      if (voiceOn) speak(data.answer);
     } catch {
       setChatError("AI service is temporarily unavailable.");
     } finally {
@@ -334,21 +274,7 @@ export function AiAnalysisClient({ farms, devices, advanced }: { farms: Farm[]; 
       )}
 
       <div className="card p-6">
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <h2 className="font-bold text-brand-800">Ask AI</h2>
-          {voiceSupported && (
-            <button
-              type="button"
-              onClick={toggleVoice}
-              className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition ${
-                voiceOn ? "bg-brand-600 text-white" : "border border-border text-brand-800 hover:border-brand-400"
-              }`}
-              title={voiceOn ? "ปิดเสียงอ่านคำตอบ" : "เปิดเสียงอ่านคำตอบ"}
-            >
-              {voiceOn ? "🔊 เสียงเปิด" : "🔇 เสียงปิด"}
-            </button>
-          )}
-        </div>
+        <h2 className="font-bold text-brand-800 mb-1">Ask AI</h2>
         <p className="text-xs text-brand-900/50 mb-3">ถาม AI เกี่ยวกับฟาร์มของคุณ — สภาพอากาศ, ค่า Sensor, หรือความรู้การเกษตรทั่วไป</p>
 
         {messages.length > 0 && (
