@@ -12,9 +12,12 @@ import { AiProviderError } from "./types";
 // consistently on a chat call made shortly after an analyze call (looks
 // like free-tier per-minute rate-limit queuing on Google's side, not a
 // bug here: the request is well-formed and analyze succeeds every time).
-// Route handlers set maxDuration to give Vercel's own platform timeout
-// enough headroom above this.
-const TIMEOUT_MS = 55_000;
+// This timer starts when THIS fetch call fires, not at route entry — the
+// route also does DB reads + a weather fetch (up to 8s) first, so it must
+// stay well under maxDuration (58s) or Vercel's own hard kill fires first
+// and the caller gets a bare FUNCTION_INVOCATION_TIMEOUT instead of our
+// friendly "timeout" AiProviderError.
+const TIMEOUT_MS = 45_000;
 const MAX_OUTPUT_TOKENS = 1100;
 
 const ANALYSIS_SCHEMA = {

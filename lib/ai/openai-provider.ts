@@ -7,7 +7,7 @@
 import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./types";
 import { AiProviderError } from "./types";
 
-const TIMEOUT_MS = 55_000; // kept symmetric with gemini-provider.ts's timeout
+const TIMEOUT_MS = 45_000; // kept symmetric with gemini-provider.ts's timeout
 const MAX_OUTPUT_TOKENS = 1100;
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
