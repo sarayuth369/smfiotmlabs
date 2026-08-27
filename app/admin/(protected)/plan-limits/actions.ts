@@ -33,6 +33,7 @@ export async function updatePlanLimits(planId: string, formData: FormData): Prom
   const api_rate_limit_per_min = parseLimit(formData, "api_rate_limit_per_min", 0);
   const max_ai_analyses_per_month = parseLimit(formData, "max_ai_analyses_per_month", 0);
   const max_ai_chat_per_month = parseLimit(formData, "max_ai_chat_per_month", 0);
+  const max_automation_rules = parseLimit(formData, "max_automation_rules", 0);
 
   const entitlements: Record<string, boolean> = {};
   for (const f of KNOWN_FEATURES) {
@@ -53,6 +54,7 @@ export async function updatePlanLimits(planId: string, formData: FormData): Prom
       api_rate_limit_per_min,
       max_ai_analyses_per_month,
       max_ai_chat_per_month,
+      max_automation_rules,
       entitlements,
       updated_at: new Date().toISOString(),
     })

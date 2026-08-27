@@ -14,6 +14,7 @@ export type PlanLimits = {
   api_rate_limit_per_min: number | null;
   max_ai_analyses_per_month: number | null;
   max_ai_chat_per_month: number | null;
+  max_automation_rules: number | null;
 };
 
 /** Feature-flag map — extend keys freely; unknown keys default to false. */
@@ -30,15 +31,15 @@ export type UserPlan = {
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0, max_ai_analyses_per_month: 0, max_ai_chat_per_month: 0 },
-  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60, max_ai_analyses_per_month: 30, max_ai_chat_per_month: 60 },
-  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300, max_ai_analyses_per_month: 150, max_ai_chat_per_month: 300 },
-  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600, max_ai_analyses_per_month: null, max_ai_chat_per_month: null },
+  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0, max_ai_analyses_per_month: 0, max_ai_chat_per_month: 0, max_automation_rules: 0 },
+  pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60, max_ai_analyses_per_month: 30, max_ai_chat_per_month: 60, max_automation_rules: 10 },
+  business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300, max_ai_analyses_per_month: 150, max_ai_chat_per_month: 300, max_automation_rules: 50 },
+  enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600, max_ai_analyses_per_month: null, max_ai_chat_per_month: null, max_automation_rules: null },
 };
 
 const FALLBACK_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
-  starter: { reports: true, rules: true, sheets_export: true, csv_export: true, api: false, api_control: false, ai: false, ai_advanced: false },
-  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true, api: true, api_control: false, ai: true, ai_advanced: false },
+  starter: { reports: true, rules: true, sheets_export: true, csv_export: true, api: false, api_control: false, ai: false, ai_advanced: false, automation: false },
+  pro: { line_notify: true, reports: true, rules: true, sheets_export: true, csv_export: true, api: true, api_control: false, ai: true, ai_advanced: false, automation: true },
   business: {
     line_notify: true,
     reports: true,
@@ -96,7 +97,7 @@ export async function getUserPlan(
   const { data: row } = await supabase
     .from("subscription_plans")
     .select(
-      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, max_ai_analyses_per_month, max_ai_chat_per_month, entitlements"
+      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, max_ai_analyses_per_month, max_ai_chat_per_month, max_automation_rules, entitlements"
     )
     .eq("plan_id", planId)
     .maybeSingle();
@@ -131,6 +132,7 @@ export async function getUserPlan(
       api_rate_limit_per_min: row ? (row.api_rate_limit_per_min as number | null) : fb.api_rate_limit_per_min,
       max_ai_analyses_per_month: row ? (row.max_ai_analyses_per_month as number | null) : fb.max_ai_analyses_per_month,
       max_ai_chat_per_month: row ? (row.max_ai_chat_per_month as number | null) : fb.max_ai_chat_per_month,
+      max_automation_rules: row ? (row.max_automation_rules as number | null) : fb.max_automation_rules,
     },
     entitlements,
   };
@@ -397,6 +399,46 @@ export async function canCreateRelay(
       planId: plan.plan_id,
       planName: plan.name,
       reason: `คุณใช้จำนวน Relay ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
+    };
+  }
+  return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };
+}
+
+/** Counts ALL automation_rules owned by the user (enabled + disabled both count against quota). */
+export async function getAutomationUsage(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { count } = await supabase
+    .from("automation_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  return count ?? 0;
+}
+
+export async function canCreateAutomation(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<LimitCheck> {
+  const [plan, current] = await Promise.all([
+    getUserPlan(supabase, userId),
+    getAutomationUsage(supabase, userId),
+  ]);
+  if (!hasFeature(plan, "automation")) {
+    return { ok: false, current, limit: 0, planId: plan.plan_id, planName: plan.name, reason: `แพ็กเกจ ${plan.name} ไม่รองรับ Automation` };
+  }
+  const limit = plan.limits.max_automation_rules;
+  if (limit === null) {
+    return { ok: true, current, limit: null, planId: plan.plan_id, planName: plan.name };
+  }
+  if (current >= limit) {
+    return {
+      ok: false,
+      current,
+      limit,
+      planId: plan.plan_id,
+      planName: plan.name,
+      reason: `คุณใช้จำนวน Automation ครบตามแพ็กเกจ ${plan.name} แล้ว (${current}/${limit})`,
     };
   }
   return { ok: true, current, limit, planId: plan.plan_id, planName: plan.name };

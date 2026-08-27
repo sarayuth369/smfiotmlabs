@@ -99,7 +99,7 @@ export async function saveSchedule(
   const result = await publishToDevice(customer_uuid, device_uid, "config_schedule", schedules, {
     retain: true,
   });
-  if (result.ok) revalidatePath(`/dashboard/farms/${farm_id}/rules`);
+  if (result.ok) revalidatePath(`/dashboard/farms/${farm_id}/automation`);
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
 
@@ -121,6 +121,6 @@ export async function saveRules(
   const { device_uid, customer_uuid, farm_id } = await requireOwnedDevice(supabase, user.id, deviceId);
 
   const result = await publishToDevice(customer_uuid, device_uid, "config_rules", rules, { retain: true });
-  if (result.ok) revalidatePath(`/dashboard/farms/${farm_id}/rules`);
+  if (result.ok) revalidatePath(`/dashboard/farms/${farm_id}/automation`);
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }

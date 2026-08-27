@@ -88,7 +88,7 @@ export default async function FarmDetailPage({
     { key: "nodes", label: "อุปกรณ์ IoT", href: `/dashboard/farms/${farmId}/devices` },
     { key: "sensors", label: "Sensors", href: `/dashboard/farms/${farmId}/sensors` },
     { key: "controls", label: "Controls", href: `/dashboard/farms/${farmId}/controls` },
-    { key: "rules", label: "Rules", href: `/dashboard/farms/${farmId}/rules` },
+    { key: "automation", label: "Automation", href: `/dashboard/farms/${farmId}/automation` },
     { key: "notifications", label: "การแจ้งเตือน", href: `/dashboard/farms/${farmId}/notifications` },
     { key: "api", label: "API Access", href: `/dashboard/api-access` },
     { key: "ai", label: "AI Analysis", href: `/dashboard/ai-analysis` },

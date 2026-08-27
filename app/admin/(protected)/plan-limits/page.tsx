@@ -19,6 +19,7 @@ type PlanRow = {
   api_rate_limit_per_min: number | null;
   max_ai_analyses_per_month: number | null;
   max_ai_chat_per_month: number | null;
+  max_automation_rules: number | null;
   entitlements: Record<string, boolean> | null;
   sort_order: number;
   is_active: boolean;
@@ -33,7 +34,7 @@ export default async function PlanLimitsPage() {
   const { data } = await admin
     .from("subscription_plans")
     .select(
-      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, max_ai_analyses_per_month, max_ai_chat_per_month, entitlements, sort_order, is_active"
+      "plan_id, name, price, price_note, max_farms, max_zones, max_nodes, max_sensors, max_relays, sensor_history_days, max_api_keys, api_rate_limit_per_min, max_ai_analyses_per_month, max_ai_chat_per_month, max_automation_rules, entitlements, sort_order, is_active"
     )
     .in("plan_id", PLAN_ORDER as unknown as string[]);
 
@@ -113,6 +114,11 @@ export default async function PlanLimitsPage() {
                     name="max_ai_chat_per_month"
                     label="AI Chat / เดือน"
                     initial={p.max_ai_chat_per_month}
+                  />
+                  <LimitInput
+                    name="max_automation_rules"
+                    label="Max Automation Rules"
+                    initial={p.max_automation_rules}
                   />
                 </div>
               </div>

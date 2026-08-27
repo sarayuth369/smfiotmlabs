@@ -6,6 +6,7 @@ import { createWebhook, toggleWebhook, deleteWebhook, testWebhookAction } from "
 const EVENTS = [
   { key: "device_online", label: "อุปกรณ์กลับมาออนไลน์" },
   { key: "sensor_threshold", label: "Sensor ถึงเกณฑ์ที่ตั้งไว้ (Rules)" },
+  { key: "automation_triggered", label: "Automation ทำงาน (แจ้งเตือน)" },
   { key: "device_event", label: "เหตุการณ์อื่นจากอุปกรณ์ (boot, ota, error)" },
 ];
 

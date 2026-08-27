@@ -75,5 +75,16 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ranAt: new Date(nowMs).toISOString(), ...stats });
+  // Automation execution log retention — flat 90-day window (not plan-tied, keeps this
+  // cheap and simple; the log is diagnostic/activity-feed data, not billable history).
+  let automationLogsDeleted = 0;
+  try {
+    const cutoff = new Date(nowMs - 90 * 86_400_000).toISOString();
+    const { count } = await admin.from("automation_logs").delete({ count: "exact" }).lt("executed_at", cutoff);
+    automationLogsDeleted = count ?? 0;
+  } catch (e) {
+    stats.errors.push(`automation_logs cleanup: ${(e as Error).message}`);
+  }
+
+  return NextResponse.json({ ok: true, ranAt: new Date(nowMs).toISOString(), ...stats, automationLogsDeleted });
 }
