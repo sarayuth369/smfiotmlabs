@@ -4,11 +4,16 @@ import { evaluateScheduleRules } from "@/lib/automation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 /**
- * Vercel Cron — fires schedule-type automation_rules whose next_run_at has arrived.
- * Sensor-value rules are evaluated inline in /api/telemetry/ingest instead; schedule
- * rules need this separate tick since nothing else calls in at the scheduled instant.
+ * Fires schedule-type automation_rules whose next_run_at has arrived. Sensor-value
+ * rules are evaluated inline in /api/telemetry/ingest instead; schedule rules need
+ * a separate tick since nothing else calls in at the scheduled instant.
+ *
+ * Triggered externally (GitHub Actions / cron-job.org), NOT Vercel's native cron --
+ * Hobby plan only allows daily Vercel cron schedules, too coarse for this. Any caller
+ * with the right CRON_SECRET can hit this on whatever interval is configured there.
  */
 export async function GET(req: Request) {
   const authz = req.headers.get("authorization") ?? "";
