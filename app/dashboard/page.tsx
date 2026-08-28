@@ -4,6 +4,7 @@ import type { PlanId } from "@/lib/plans";
 import { getUserPlan, getFarmUsage, getNodeUsage, getSensorUsage, formatPlanLabel, formatLimit, usagePercent } from "@/lib/plan-limits";
 import { PlanCard } from "./_components/PlanCard";
 import { NotificationsPanel, type NotificationItem } from "./_components/NotificationsPanel";
+import { SupportChatWidget } from "./_components/SupportChatWidget";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -244,6 +245,8 @@ export default async function DashboardPage() {
           ระบบด้านในกำลังพัฒนาต่อ — หน้านี้จะแสดงกราฟข้อมูลเรียลไทม์และการควบคุมอุปกรณ์เร็ว ๆ นี้
         </p>
       </div>
+
+      <SupportChatWidget />
     </div>
   );
 }
