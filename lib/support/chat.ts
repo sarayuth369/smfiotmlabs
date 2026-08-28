@@ -137,6 +137,7 @@ export async function sendSupportMessage(
   ]);
 
   const knowledgeBlock = knowledge.map((k) => `[${k.category}] ${k.title}\n${k.content}`).join("\n\n");
+  console.log("[support.chat] KB entries used this turn:", knowledge.map((k) => k.title));
   const turnCount = Math.floor(history.length / 2) + 1;
   const systemPrompt = buildSystemPrompt({
     assistantName: cfg.assistant_name,
