@@ -1,9 +1,8 @@
 /**
  * Support Knowledge Base — admin CRUD + retrieval for the chat.
  *
- * Retrieval is deliberately simple keyword matching (Postgres full-text
- * via websearch_to_tsquery), not a vector DB — this scope doesn't need
- * one yet, and it keeps every chat turn cheap: only the few relevant
+ * Retrieval is deliberately simple, not a vector DB — this scope doesn't
+ * need one yet, and it keeps every chat turn cheap: only the few relevant
  * entries found are sent to the AI, never the whole table.
  */
 
@@ -72,8 +71,8 @@ const STOPWORDS = new Set([
   "ที่", "และ", "หรือ", "ของ", "ใน", "ให้", "ได้", "เป็น", "มี", "จะ", "ค่ะ", "คะ", "ครับ", "คับ", "นะ", "แล้ว", "ยัง",
 ]);
 
-function extractKeywords(query: string): string[] {
-  return query
+function extractKeywords(text: string): string[] {
+  return text
     .split(/[\s,./?!()]+/)
     .map((w) => w.trim())
     .filter((w) => w.length >= 2 && !STOPWORDS.has(w.toLowerCase()))
@@ -82,25 +81,42 @@ function extractKeywords(query: string): string[] {
 
 /**
  * Returns the top few PUBLISHED entries relevant to the user's message,
- * truncated, for injection into the AI prompt. Plain keyword/ILIKE
- * matching across title+content — deliberately not a vector DB, this
- * scope doesn't need one, and it keeps every chat turn cheap since only
- * the few matched entries (never the whole table) go into the prompt.
+ * truncated, for injection into the AI prompt.
+ *
+ * Matches in both directions because Thai is often typed with NO spaces
+ * between words ("มีแพ็กเกจอะไรบ้างคับ" is one unbroken string) — splitting
+ * only the user's message into keywords misses that entirely, since the
+ * whole sentence never appears verbatim in any article. Splitting each
+ * article's own title instead (admin-authored, reliably spaced, e.g.
+ * "แพ็กเกจ Pro") and checking whether those words appear as a *substring*
+ * of the raw, unsplit query catches the no-space case naturally. The KB
+ * is small by design (admin-curated, not user-generated), so scoring
+ * every published row in-process is cheap — no need for DB-side search
+ * or a real Thai word segmenter at this scope.
  */
 export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
   const admin = createAdminClient();
-  const keywords = extractKeywords(query);
-  if (keywords.length === 0) return [];
-
-  const orClauses = keywords.flatMap((k) => [`title.ilike.%${k}%`, `content.ilike.%${k}%`]).join(",");
-  const { data } = await admin
-    .from("support_knowledge_base")
-    .select("*")
-    .eq("status", "published")
-    .or(orClauses)
-    .order("updated_at", { ascending: false })
-    .limit(MAX_CONTEXT_ENTRIES);
-
+  const { data } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
   const rows = (data as KnowledgeEntry[] | null) ?? [];
-  return rows.map((r) => ({ ...r, content: r.content.slice(0, MAX_CONTENT_CHARS_PER_ENTRY) }));
+  if (rows.length === 0) return [];
+
+  const queryLower = query.toLowerCase();
+  const queryKeywords = extractKeywords(query).map((w) => w.toLowerCase());
+
+  const scored = rows
+    .map((r) => {
+      let score = 0;
+      const titleWords = extractKeywords(r.title).map((w) => w.toLowerCase());
+      // direction 1: article's own words found inside the raw query (handles no-space Thai)
+      for (const w of titleWords) if (queryLower.includes(w)) score += 2;
+      // direction 2: query's tokens found inside the article (handles spaced/English input)
+      const haystack = (r.title + " " + r.content).toLowerCase();
+      for (const k of queryKeywords) if (haystack.includes(k)) score += 1;
+      return { entry: r, score };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.entry.updated_at).getTime() - new Date(a.entry.updated_at).getTime())
+    .slice(0, MAX_CONTEXT_ENTRIES);
+
+  return scored.map((s) => ({ ...s.entry, content: s.entry.content.slice(0, MAX_CONTENT_CHARS_PER_ENTRY) }));
 }
