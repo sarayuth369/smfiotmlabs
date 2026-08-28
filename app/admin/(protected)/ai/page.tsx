@@ -63,6 +63,7 @@ export default async function AdminAiPage() {
           >
             <option value="gemini">Gemini</option>
             <option value="openai">OpenAI</option>
+            <option value="groq">Groq</option>
           </select>
           <p className="mt-1 text-xs text-brand-900/50">
             ระบบใช้ provider นี้เท่านั้น — ไม่ fallback อัตโนมัติไป provider อื่น เพื่อป้องกันค่าใช้จ่ายพุ่งโดยไม่ตั้งใจ

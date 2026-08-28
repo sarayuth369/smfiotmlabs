@@ -26,7 +26,7 @@ export type AiChatResult = {
 export type AiChatTurn = { role: "user" | "assistant"; content: string };
 
 export interface AiProvider {
-  readonly id: "gemini" | "openai";
+  readonly id: "gemini" | "openai" | "groq";
   analyze(systemPrompt: string, userPrompt: string): Promise<AiAnalysisResult>;
   chat(systemPrompt: string, history: AiChatTurn[], question: string): Promise<AiChatResult>;
 }

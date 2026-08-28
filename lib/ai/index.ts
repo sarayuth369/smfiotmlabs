@@ -11,6 +11,7 @@
 import { getAiConfig, hasProviderKey, type AiProviderId } from "@/lib/admin/ai-settings";
 import { GeminiProvider } from "./gemini-provider";
 import { OpenAiProvider } from "./openai-provider";
+import { GroqProvider } from "./groq-provider";
 import { AiProviderError, type AiProvider, type AiAnalysisResult, type AiChatResult, type AiChatTurn } from "./types";
 
 export { AiProviderError };
@@ -25,6 +26,13 @@ async function resolveActiveProvider(): Promise<{ provider: AiProvider; provider
       throw new AiProviderError("AI provider is currently unavailable", "unavailable");
     }
     return { provider: new GeminiProvider(cfg.gemini_model), providerId: "gemini", model: cfg.gemini_model };
+  }
+
+  if (id === "groq") {
+    if (!cfg.groq_enabled || !hasProviderKey("groq")) {
+      throw new AiProviderError("AI provider is currently unavailable", "unavailable");
+    }
+    return { provider: new GroqProvider(cfg.groq_model), providerId: "groq", model: cfg.groq_model };
   }
 
   if (!cfg.openai_enabled || !hasProviderKey("openai")) {
