@@ -109,6 +109,7 @@ export async function findRelevantKnowledge(query: string): Promise<KnowledgeEnt
   // a one-off network blip between Vercel and Supabase.
   let rows = await fetchPublishedEntries();
   if (rows.length === 0) rows = await fetchPublishedEntries();
+  console.log("[support.knowledge] raw published rows fetched:", rows.length, "query:", query);
   if (rows.length === 0) return [];
 
   const queryLower = query.toLowerCase();
