@@ -8,9 +8,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getUserPlan, formatPlanLabel } from "@/lib/plan-limits";
-import { getSupportAiConfig, getSupportLineSettings, isSupportLineReady } from "./settings";
-import { findRelevantKnowledge } from "./knowledge";
-import { callGroqSupport, callOpenAiSupport } from "./provider";
+import { getSupportAiConfig, getSupportLineSettings, isSupportLineReady, type SupportAiConfig } from "./settings";
+import { listPublishedSummaries, getKnowledgeByIds, findRelevantKnowledgeByKeyword, type KnowledgeEntry } from "./knowledge";
+import { callGroqSupport, callOpenAiSupport, selectRelevantGroq, selectRelevantOpenAi } from "./provider";
 import { pushLineText, broadcastLineText } from "@/lib/line";
 
 const HISTORY_WINDOW_MESSAGES = 10; // last 5 exchanges — bounds tokens per turn
@@ -66,6 +66,28 @@ async function saveMessage(conversationId: string, role: "user" | "assistant", c
   const admin = createAdminClient();
   await admin.from("support_messages").insert({ conversation_id: conversationId, role, content });
   await admin.from("support_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
+}
+
+/**
+ * AI-driven knowledge retrieval: asks the active provider which published
+ * articles (by title/category only) are relevant to the customer's
+ * message, then fetches full content for just those. Understands meaning,
+ * not just exact wording — a spelling variant, a paraphrase, or an
+ * indirect way of asking still finds the right article, unlike plain
+ * substring matching. Falls back to keyword matching only if the AI call
+ * itself fails (no key / provider error) — if the AI runs and genuinely
+ * finds nothing relevant, that's respected, not overridden.
+ */
+async function findRelevantKnowledge(cfg: SupportAiConfig, message: string): Promise<KnowledgeEntry[]> {
+  const summaries = await listPublishedSummaries();
+  if (summaries.length === 0) return [];
+
+  const select = cfg.provider === "groq" ? selectRelevantGroq : selectRelevantOpenAi;
+  const model = cfg.provider === "groq" ? cfg.groq_model : cfg.openai_model;
+  const result = await select(model, message, summaries);
+
+  if (result.ok) return getKnowledgeByIds(result.ids);
+  return findRelevantKnowledgeByKeyword(message);
 }
 
 async function buildAccountContext(supabase: SupabaseClient, userId: string): Promise<string> {
@@ -132,7 +154,7 @@ export async function sendSupportMessage(
 
   const [history, knowledge, accountContext] = await Promise.all([
     loadHistory(conversation.id),
-    findRelevantKnowledge(message),
+    findRelevantKnowledge(cfg, message),
     buildAccountContext(supabase, userId),
   ]);
 

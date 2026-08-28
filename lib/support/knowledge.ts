@@ -93,21 +93,6 @@ function extractKeywords(text: string): string[] {
     .slice(0, 6);
 }
 
-/**
- * Returns the top few PUBLISHED entries relevant to the user's message,
- * truncated, for injection into the AI prompt.
- *
- * Matches in both directions because Thai is often typed with NO spaces
- * between words ("มีแพ็กเกจอะไรบ้างคับ" is one unbroken string) — splitting
- * only the user's message into keywords misses that entirely, since the
- * whole sentence never appears verbatim in any article. Splitting each
- * article's own title instead (admin-authored, reliably spaced, e.g.
- * "แพ็กเกจ Pro") and checking whether those words appear as a *substring*
- * of the raw, unsplit query catches the no-space case naturally. The KB
- * is small by design (admin-curated, not user-generated), so scoring
- * every published row in-process is cheap — no need for DB-side search
- * or a real Thai word segmenter at this scope.
- */
 async function fetchPublishedEntries(): Promise<KnowledgeEntry[]> {
   const admin = createAdminClient();
   const { data, error } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
@@ -115,7 +100,42 @@ async function fetchPublishedEntries(): Promise<KnowledgeEntry[]> {
   return (data as KnowledgeEntry[] | null) ?? [];
 }
 
-export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
+export type KnowledgeSummary = { id: string; title: string; category: string };
+
+/** Titles + categories only, for the AI relevance-selection call — never
+ * full content, so that call stays cheap even as the KB grows. */
+export async function listPublishedSummaries(): Promise<KnowledgeSummary[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("support_knowledge_base").select("id, title, category").eq("status", "published");
+  if (error) console.warn("[support.knowledge] query error:", error.message, error.code);
+  return (data as KnowledgeSummary[] | null) ?? [];
+}
+
+export async function getKnowledgeByIds(ids: string[]): Promise<KnowledgeEntry[]> {
+  if (ids.length === 0) return [];
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("support_knowledge_base").select("*").in("id", ids).eq("status", "published");
+  if (error) console.warn("[support.knowledge] query error:", error.message, error.code);
+  return ((data as KnowledgeEntry[] | null) ?? []).map((r) => ({ ...r, content: r.content.slice(0, MAX_CONTENT_CHARS_PER_ENTRY) }));
+}
+
+/**
+ * Fallback path only — used when the AI-driven relevance selection
+ * (lib/support/provider.ts's selectRelevantGroq/OpenAi) is unavailable
+ * (no API key / provider error), not when it ran and legitimately found
+ * nothing. Plain substring matching, so it only catches spelling exactly
+ * as written (plus the small SPELLING_VARIANTS list above) — the AI path
+ * is what actually understands paraphrasing/meaning.
+ *
+ * Matches in both directions because Thai is often typed with NO spaces
+ * between words ("มีแพ็กเกจอะไรบ้างคับ" is one unbroken string) — splitting
+ * only the user's message into keywords misses that entirely, since the
+ * whole sentence never appears verbatim in any article. Splitting each
+ * article's own title instead (admin-authored, reliably spaced, e.g.
+ * "แพ็กเกจ Pro") and checking whether those words appear as a *substring*
+ * of the raw, unsplit query catches the no-space case naturally.
+ */
+export async function findRelevantKnowledgeByKeyword(query: string): Promise<KnowledgeEntry[]> {
   const rows = await fetchPublishedEntries();
   if (rows.length === 0) return [];
 
