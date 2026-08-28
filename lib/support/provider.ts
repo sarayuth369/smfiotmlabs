@@ -52,7 +52,7 @@ async function callChatCompletions(
         messages,
         response_format: { type: "json_schema", json_schema: SUPPORT_JSON_SCHEMA },
         max_tokens: maxTokens,
-        temperature: 0.4,
+        temperature: 0.2,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
