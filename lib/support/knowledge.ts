@@ -96,8 +96,10 @@ function extractKeywords(text: string): string[] {
  */
 export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
   const admin = createAdminClient();
-  const { data } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
+  const { data, error } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
+  if (error) console.warn("[support.knowledge] query error:", error.message, error.code);
   const rows = (data as KnowledgeEntry[] | null) ?? [];
+  console.log("[support.knowledge] published rows fetched:", rows.length);
   if (rows.length === 0) return [];
 
   const queryLower = query.toLowerCase();
