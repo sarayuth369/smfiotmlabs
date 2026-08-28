@@ -130,11 +130,15 @@ export async function sendSupportMessage(
     return { ok: true, conversationId: conversation.id, reply: "", suggestEscalation: false, status: "ESCALATED" };
   }
 
-  const [history, knowledge, accountContext] = await Promise.all([
-    loadHistory(conversation.id),
-    findRelevantKnowledge(message),
-    buildAccountContext(supabase, userId),
-  ]);
+  // Sequential, not Promise.all — observed live: findRelevantKnowledge()
+  // called alongside these other two concurrent DB calls kept returning
+  // zero rows despite direct SQL and an isolated single call both
+  // confirming the data and the function are both fine on their own.
+  // Suspected connection contention under concurrent createAdminClient()
+  // calls in the same invocation; sequential avoids it either way.
+  const history = await loadHistory(conversation.id);
+  const knowledge = await findRelevantKnowledge(message);
+  const accountContext = await buildAccountContext(supabase, userId);
 
   const knowledgeBlock = knowledge.map((k) => `[${k.category}] ${k.title}\n${k.content}`).join("\n\n");
   console.log("[support.chat] KB entries used this turn:", knowledge.map((k) => k.title));
