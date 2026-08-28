@@ -10,7 +10,12 @@ import type { AiProvider, AiAnalysisResult, AiChatResult, AiChatTurn } from "./t
 import { AiProviderError } from "./types";
 
 const TIMEOUT_MS = 45_000; // kept symmetric with gemini/openai providers' timeout
-const MAX_OUTPUT_TOKENS = 1100;
+// gpt-oss models are reasoning models — they spend part of the output
+// token budget on internal reasoning before emitting the final JSON, so
+// this needs to be well above openai-provider.ts's 1100 or Groq truncates
+// mid-document on the large nested farm_analysis schema (confirmed live:
+// "max completion tokens reached before generating a valid document").
+const MAX_OUTPUT_TOKENS = 4000;
 const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 const ANALYSIS_JSON_SCHEMA = {
