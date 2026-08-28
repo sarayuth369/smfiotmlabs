@@ -94,11 +94,21 @@ function extractKeywords(text: string): string[] {
  * every published row in-process is cheap — no need for DB-side search
  * or a real Thai word segmenter at this scope.
  */
-export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
+async function fetchPublishedEntries(): Promise<KnowledgeEntry[]> {
   const admin = createAdminClient();
   const { data, error } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
   if (error) console.warn("[support.knowledge] query error:", error.message, error.code);
-  const rows = (data as KnowledgeEntry[] | null) ?? [];
+  return (data as KnowledgeEntry[] | null) ?? [];
+}
+
+export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
+  // Retried once on an empty result — an intermittent transient
+  // connection hiccup (observed live: zero rows back with no error,
+  // confirmed via direct SQL that published rows definitely exist) is
+  // cheap to route around this way without needing to fully root-cause
+  // a one-off network blip between Vercel and Supabase.
+  let rows = await fetchPublishedEntries();
+  if (rows.length === 0) rows = await fetchPublishedEntries();
   if (rows.length === 0) return [];
 
   const queryLower = query.toLowerCase();
