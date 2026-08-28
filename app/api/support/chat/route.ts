@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-type Body = { message?: string };
+type Body = { message?: string; conversation_id?: string | null };
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -25,7 +25,11 @@ export async function POST(req: Request) {
   const message = String(body.message ?? "").trim();
   if (!message) return NextResponse.json({ error: "message is required" }, { status: 400 });
 
-  const result = await sendSupportMessage(supabase, user.id, message);
+  // conversation_id is only ever a hint for "continue the conversation this
+  // browser session already started" — sendSupportMessage independently
+  // verifies it belongs to this user before reusing it, so a forged id from
+  // another user's conversation is never actually attached to.
+  const result = await sendSupportMessage(supabase, user.id, message, body.conversation_id ?? null);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
 
   return NextResponse.json({

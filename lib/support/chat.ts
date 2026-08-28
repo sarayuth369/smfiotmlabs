@@ -22,17 +22,25 @@ export type SendMessageResult =
   | { ok: true; conversationId: string; reply: string; suggestEscalation: boolean; status: string }
   | { ok: false; error: string };
 
-async function getActiveConversation(userId: string): Promise<{ id: string; status: string }> {
+/**
+ * Resolves which conversation a message belongs to. The widget starts a
+ * fresh conversation every time it's opened (by design — see
+ * SupportChatWidget's `open` reset), so this only ever resumes a specific
+ * conversation the caller already knows about (passed explicitly), never
+ * "whatever was last active" — old conversations stay in the DB for
+ * admin/history but are never silently re-attached to on a new session.
+ */
+async function resolveConversation(userId: string, conversationId?: string | null): Promise<{ id: string; status: string }> {
   const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("support_conversations")
-    .select("id, status")
-    .eq("user_id", userId)
-    .neq("status", "CLOSED")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existing) return existing as { id: string; status: string };
+  if (conversationId) {
+    const { data: owned } = await admin
+      .from("support_conversations")
+      .select("id, status")
+      .eq("id", conversationId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (owned) return owned as { id: string; status: string };
+  }
 
   const { data: created } = await admin
     .from("support_conversations")
@@ -105,7 +113,8 @@ function buildSystemPrompt(params: {
 export async function sendSupportMessage(
   supabase: SupabaseClient,
   userId: string,
-  userMessage: string
+  userMessage: string,
+  conversationId?: string | null
 ): Promise<SendMessageResult> {
   const message = userMessage.trim().slice(0, MAX_USER_MESSAGE_CHARS);
   if (!message) return { ok: false, error: "empty message" };
@@ -113,7 +122,7 @@ export async function sendSupportMessage(
   const cfg = await getSupportAiConfig();
   if (!cfg.enabled) return { ok: false, error: "Support chat is currently unavailable." };
 
-  const conversation = await getActiveConversation(userId);
+  const conversation = await resolveConversation(userId, conversationId);
   if (conversation.status === "ESCALATED") {
     // still record the message so the human agent sees it, but don't call AI again
     await saveMessage(conversation.id, "user", message);
@@ -166,29 +175,6 @@ export async function sendSupportMessage(
   };
 }
 
-export async function getConversationForUser(userId: string): Promise<{ id: string; status: string; messages: ChatTurn[] } | null> {
-  const admin = createAdminClient();
-  const { data: conv } = await admin
-    .from("support_conversations")
-    .select("id, status")
-    .eq("user_id", userId)
-    .neq("status", "CLOSED")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!conv) return null;
-
-  const { data: msgs } = await admin
-    .from("support_messages")
-    .select("role, content")
-    .eq("conversation_id", conv.id)
-    .neq("role", "system")
-    .order("created_at", { ascending: true })
-    .limit(50);
-
-  return { id: conv.id as string, status: conv.status as string, messages: (msgs ?? []) as ChatTurn[] };
-}
-
 /** Server-side (non-AI) summary — deliberately not another AI call, per
  * the token-efficiency requirement. Just the last few turns, capped. */
 function buildHandoffSummary(history: ChatTurn[]): string {
@@ -201,10 +187,11 @@ export async function escalateConversation(
   userId: string,
   userEmail: string,
   userDisplayName: string,
-  reason: string
+  reason: string,
+  conversationId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
-  const conversation = await getActiveConversation(userId);
+  const conversation = await resolveConversation(userId, conversationId);
   const history = await loadHistory(conversation.id);
   const summary = buildHandoffSummary(history);
 

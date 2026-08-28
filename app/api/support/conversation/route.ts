@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getConversationForUser } from "@/lib/support/chat";
 import { getSupportAiConfig } from "@/lib/support/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Returns the user's active conversation (if any) plus the public chat
- * settings (welcome message, assistant name) — never the provider/model,
- * that's server-internal only. */
+/** Public chat settings only (welcome message, assistant name) — never
+ * the provider/model, that's server-internal only. Deliberately does NOT
+ * return a prior conversation/messages: the widget always starts a fresh
+ * conversation on open (old ones stay in the DB, just never auto-resumed
+ * into the UI), so there's nothing to restore here. */
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -21,13 +22,9 @@ export async function GET() {
     return NextResponse.json({ enabled: false });
   }
 
-  const conversation = await getConversationForUser(user.id);
   return NextResponse.json({
     enabled: true,
     assistant_name: cfg.assistant_name,
     welcome_message: cfg.welcome_message,
-    conversation_id: conversation?.id ?? null,
-    status: conversation?.status ?? "AI_ACTIVE",
-    messages: conversation?.messages ?? [],
   });
 }

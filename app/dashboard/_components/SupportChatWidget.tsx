@@ -4,13 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
-type ConversationResponse = {
+type ConfigResponse = {
   enabled: boolean;
   assistant_name?: string;
   welcome_message?: string;
-  conversation_id?: string | null;
-  status?: string;
-  messages?: ChatTurn[];
 };
 
 const QUICK_ACTIONS = [
@@ -28,6 +25,7 @@ export function SupportChatWidget() {
   const [welcome, setWelcome] = useState("");
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [status, setStatus] = useState("AI_ACTIVE");
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,18 +37,29 @@ export function SupportChatWidget() {
   useEffect(() => {
     fetch("/api/support/conversation")
       .then((r) => r.json())
-      .then((data: ConversationResponse) => {
+      .then((data: ConfigResponse) => {
         setEnabled(!!data.enabled);
         if (data.enabled) {
           setAssistantName(data.assistant_name || "Support");
           setWelcome(data.welcome_message || "");
-          setMessages(data.messages ?? []);
-          setStatus(data.status || "AI_ACTIVE");
         }
       })
       .catch(() => setEnabled(false))
       .finally(() => setReady(true));
   }, []);
+
+  // Every time the widget is opened, start a brand-new conversation —
+  // previous ones stay in the DB (visible to admin/history) but are never
+  // auto-restored into the chat window.
+  useEffect(() => {
+    if (!open) return;
+    setMessages([]);
+    setConversationId(null);
+    setStatus("AI_ACTIVE");
+    setSuggestEscalation(false);
+    setError(null);
+    setLastFailedMessage(null);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -69,7 +78,7 @@ export function SupportChatWidget() {
       const res = await fetch("/api/support/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, conversation_id: conversationId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -77,6 +86,7 @@ export function SupportChatWidget() {
         setLastFailedMessage(trimmed);
         return;
       }
+      if (data.conversation_id) setConversationId(data.conversation_id);
       if (data.status === "ESCALATED") {
         setStatus("ESCALATED");
         return;
@@ -97,7 +107,10 @@ export function SupportChatWidget() {
       const res = await fetch("/api/support/escalate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: messages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "" }),
+        body: JSON.stringify({
+          reason: messages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
+          conversation_id: conversationId,
+        }),
       });
       if (res.ok) {
         setStatus("ESCALATED");

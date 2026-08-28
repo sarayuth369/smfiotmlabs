@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 20;
 
-type Body = { reason?: string };
+type Body = { reason?: string; conversation_id?: string | null };
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     // reason is optional — an empty body is fine
   }
 
-  const result = await escalateConversation(user.id, user.email ?? "", displayName, String(body.reason ?? ""));
+  const result = await escalateConversation(user.id, user.email ?? "", displayName, String(body.reason ?? ""), body.conversation_id ?? null);
   if (!result.ok) return NextResponse.json({ error: result.error ?? "escalation failed" }, { status: 502 });
   return NextResponse.json({ ok: true });
 }
