@@ -61,15 +61,13 @@ const CHAT_JSON_SCHEMA = {
   strict: true,
 };
 
-async function callGroq(
+async function callGroqOnce(
   model: string,
   systemPrompt: string,
   messages: { role: "user" | "assistant"; content: string }[],
-  jsonSchema: unknown
-): Promise<unknown> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new AiProviderError("Groq API key not configured", "unavailable");
-
+  jsonSchema: unknown,
+  apiKey: string
+): Promise<{ ok: true; data: unknown } | { ok: false; retryable: boolean; error: AiProviderError }> {
   let res: Response;
   try {
     res = await fetch(ENDPOINT, {
@@ -86,29 +84,53 @@ async function callGroq(
     });
   } catch (e) {
     const isTimeout = e instanceof Error && e.name === "TimeoutError";
-    throw new AiProviderError(isTimeout ? "Groq request timed out" : "Groq request failed", isTimeout ? "timeout" : "unavailable");
+    return { ok: false, retryable: false, error: new AiProviderError(isTimeout ? "Groq request timed out" : "Groq request failed", isTimeout ? "timeout" : "unavailable") };
   }
 
   if (res.status === 429) {
     console.warn("[ai.groq] rate limited");
-    throw new AiProviderError("Groq rate limit reached", "provider_error");
+    return { ok: false, retryable: false, error: new AiProviderError("Groq rate limit reached", "provider_error") };
   }
   if (!res.ok) {
     // Body is Groq's own error description, never our request/key — safe to log.
     const bodyText = await res.text().catch(() => "");
     console.warn("[ai.groq] non-200 response", res.status, bodyText.slice(0, 500));
-    throw new AiProviderError("Groq provider error", "provider_error");
+    // json_validate_failed: the model's own generation missed a required schema
+    // field (Groq validates server-side before returning) — a known, mostly
+    // non-deterministic structured-output miss on complex/nested schemas.
+    // Groq's own guidance is to retry; a second generation usually succeeds.
+    const retryable = res.status === 400 && bodyText.includes("json_validate_failed");
+    return { ok: false, retryable, error: new AiProviderError("Groq provider error", "provider_error") };
   }
 
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
-  if (typeof text !== "string") throw new AiProviderError("Groq returned no content", "invalid_response");
+  if (typeof text !== "string") return { ok: false, retryable: false, error: new AiProviderError("Groq returned no content", "invalid_response") };
 
   try {
-    return JSON.parse(text);
+    return { ok: true, data: JSON.parse(text) };
   } catch {
-    throw new AiProviderError("Groq returned invalid JSON", "invalid_response");
+    return { ok: false, retryable: false, error: new AiProviderError("Groq returned invalid JSON", "invalid_response") };
   }
+}
+
+async function callGroq(
+  model: string,
+  systemPrompt: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+  jsonSchema: unknown
+): Promise<unknown> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new AiProviderError("Groq API key not configured", "unavailable");
+
+  const first = await callGroqOnce(model, systemPrompt, messages, jsonSchema, apiKey);
+  if (first.ok) return first.data;
+  if (!first.retryable) throw first.error;
+
+  console.warn("[ai.groq] retrying once after json_validate_failed");
+  const second = await callGroqOnce(model, systemPrompt, messages, jsonSchema, apiKey);
+  if (second.ok) return second.data;
+  throw second.error;
 }
 
 export class GroqProvider implements AiProvider {
