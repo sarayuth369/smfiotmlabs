@@ -71,8 +71,22 @@ const STOPWORDS = new Set([
   "ที่", "และ", "หรือ", "ของ", "ใน", "ให้", "ได้", "เป็น", "มี", "จะ", "ค่ะ", "คะ", "ครับ", "คับ", "นะ", "แล้ว", "ยัง",
 ]);
 
+// Common alternate Thai spellings for the same word — plain substring
+// matching treats these as completely different strings otherwise.
+// Confirmed live: a customer typing "แพคเกจ" (with ค) got zero KB matches
+// against articles titled "แพ็กเกจ" (with ็ + ก) despite being the same
+// word "package" — every automated test up to that point had (without
+// realizing it) only ever used the ็ก spelling. Extend this list as more
+// variants turn up; it's applied to both the query and article text so
+// either spelling on either side still matches.
+const SPELLING_VARIANTS: [RegExp, string][] = [[/แพคเกจ/g, "แพ็กเกจ"]];
+
+function normalizeSpelling(text: string): string {
+  return SPELLING_VARIANTS.reduce((t, [pattern, canonical]) => t.replace(pattern, canonical), text);
+}
+
 function extractKeywords(text: string): string[] {
-  return text
+  return normalizeSpelling(text)
     .split(/[\s,./?!()]+/)
     .map((w) => w.trim())
     .filter((w) => w.length >= 2 && !STOPWORDS.has(w.toLowerCase()))
@@ -102,17 +116,10 @@ async function fetchPublishedEntries(): Promise<KnowledgeEntry[]> {
 }
 
 export async function findRelevantKnowledge(query: string): Promise<KnowledgeEntry[]> {
-  // Retried once on an empty result — an intermittent transient
-  // connection hiccup (observed live: zero rows back with no error,
-  // confirmed via direct SQL that published rows definitely exist) is
-  // cheap to route around this way without needing to fully root-cause
-  // a one-off network blip between Vercel and Supabase.
-  let rows = await fetchPublishedEntries();
-  if (rows.length === 0) rows = await fetchPublishedEntries();
-  console.log("[support.knowledge] raw published rows fetched:", rows.length, "query:", query);
+  const rows = await fetchPublishedEntries();
   if (rows.length === 0) return [];
 
-  const queryLower = query.toLowerCase();
+  const queryLower = normalizeSpelling(query.toLowerCase());
   const queryKeywords = extractKeywords(query).map((w) => w.toLowerCase());
 
   const scored = rows
@@ -122,7 +129,7 @@ export async function findRelevantKnowledge(query: string): Promise<KnowledgeEnt
       // direction 1: article's own words found inside the raw query (handles no-space Thai)
       for (const w of titleWords) if (queryLower.includes(w)) score += 2;
       // direction 2: query's tokens found inside the article (handles spaced/English input)
-      const haystack = (r.title + " " + r.content).toLowerCase();
+      const haystack = normalizeSpelling((r.title + " " + r.content).toLowerCase());
       for (const k of queryKeywords) if (haystack.includes(k)) score += 1;
       return { entry: r, score };
     })
