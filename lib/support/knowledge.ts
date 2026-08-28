@@ -36,7 +36,7 @@ export const KNOWLEDGE_CATEGORIES = [
   "General FAQ",
 ] as const;
 
-const MAX_CONTEXT_ENTRIES = 3;
+const MAX_CONTEXT_ENTRIES = 5;
 const MAX_CONTENT_CHARS_PER_ENTRY = 800; // bounds prompt size even if an article is long
 
 export async function listKnowledge(): Promise<KnowledgeEntry[]> {
@@ -99,7 +99,6 @@ export async function findRelevantKnowledge(query: string): Promise<KnowledgeEnt
   const { data, error } = await admin.from("support_knowledge_base").select("*").eq("status", "published");
   if (error) console.warn("[support.knowledge] query error:", error.message, error.code);
   const rows = (data as KnowledgeEntry[] | null) ?? [];
-  console.log("[support.knowledge] published rows fetched:", rows.length);
   if (rows.length === 0) return [];
 
   const queryLower = query.toLowerCase();

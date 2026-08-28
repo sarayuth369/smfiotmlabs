@@ -131,10 +131,7 @@ export async function sendSupportMessage(
 
   const [history, knowledge, accountContext] = await Promise.all([
     loadHistory(conversation.id),
-    findRelevantKnowledge(message).then((k) => {
-      console.log("[support.chat] KB match count:", k.length, "titles:", k.map((e) => e.title));
-      return k;
-    }),
+    findRelevantKnowledge(message),
     buildAccountContext(supabase, userId),
   ]);
 
