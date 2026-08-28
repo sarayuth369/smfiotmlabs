@@ -16,7 +16,7 @@ export async function updateAiConfig(formData: FormData): Promise<void> {
     openai_enabled: formData.get("openai_enabled") === "on",
     openai_model: String(formData.get("openai_model") ?? "").trim() || "gpt-4o-mini",
     groq_enabled: formData.get("groq_enabled") === "on",
-    groq_model: String(formData.get("groq_model") ?? "").trim() || "llama-3.3-70b-versatile",
+    groq_model: String(formData.get("groq_model") ?? "").trim() || "openai/gpt-oss-120b",
   };
 
   const { error } = await saveAiConfig(config, session.id);

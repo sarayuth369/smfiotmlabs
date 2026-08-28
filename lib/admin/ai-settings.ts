@@ -33,10 +33,13 @@ const DEFAULT_AI_CONFIG: AiConfig = {
   openai_enabled: false,
   openai_model: process.env.OPENAI_MODEL || "gpt-4o-mini",
   groq_enabled: false,
-  // llama-3.3-70b-versatile: fast (Groq LPU inference), cost-efficient,
+  // openai/gpt-oss-120b: Groq's current standard-tier general-purpose
+  // production model — llama-3.3-70b-versatile moved to Enterprise-only
+  // access (confirmed live, Aug 2026 — Groq's own 404 "model_not_found"
+  // names it explicitly). Fast (Groq LPU inference), cost-efficient,
   // strong enough for structured sensor analysis + farm chat. Admin can
   // change this in Admin > AI Analysis without any code change.
-  groq_model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+  groq_model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
 };
 
 const PROVIDER_IDS: AiProviderId[] = ["gemini", "openai", "groq"];
