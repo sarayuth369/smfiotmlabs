@@ -23,22 +23,6 @@ const services = [
     cta: { label: "Order Now", href: "/#contact" },
     accent: "🛠️",
   },
-  {
-    name: "AI Smart Farm",
-    priceLabel: "",
-    price: "฿699",
-    priceNote: "/ เดือน",
-    features: [
-      "AI วิเคราะห์ข้อมูล",
-      "แจ้งเตือนความผิดปกติ",
-      "แนะนำการให้น้ำ",
-      "วิเคราะห์อุณหภูมิ",
-      "วิเคราะห์ความชื้น",
-    ],
-    comingSoon: true,
-    cta: null as { label: string; href: string } | null,
-    accent: "🤖",
-  },
 ];
 
 function Check() {
@@ -91,14 +75,9 @@ export default async function IotNodesPage() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-5">
+            <div className="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
               {services.map((s) => (
                 <div key={s.name} className="card p-6 flex flex-col relative">
-                  {s.comingSoon && (
-                    <div className="absolute top-4 right-4 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-brand-100 text-brand-700">
-                      Coming Soon
-                    </div>
-                  )}
                   <div className="text-3xl">{s.accent}</div>
                   <div className="mt-3 font-bold text-brand-800">{s.name}</div>
                   <div className="mt-3 flex items-baseline gap-1 text-brand-800">
