@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { provisionDevice, type ProvisionResult } from "../actions";
 import { ProvisionInstallFlasher } from "./ProvisionInstallFlasher";
+import { PlanLimitNotice } from "../../farms/_components/PlanLimitNotice";
 
 export type FarmOpt = { id: string; name: string };
 export type ZoneOpt = { id: string; name: string; farm_id: string };
+export type QuotaInfo = { ok: boolean; planName: string; current: number; limit: number };
 
 const DEVICE_TYPES = ["ESP32 Node", "Gateway", "Sensor Hub", "Relay Module", "อื่น ๆ"];
 
@@ -15,11 +17,13 @@ export function ProvisionDeviceForm({
   initialZoneId,
   farms,
   zones,
+  quota,
 }: {
   initialFarmId?: string;
   initialZoneId?: string | null;
   farms: FarmOpt[];
   zones: ZoneOpt[];
+  quota: QuotaInfo;
 }) {
   const [selectedFarm, setSelectedFarm] = useState<string>(initialFarmId ?? farms[0]?.id ?? "");
   const filteredZones = useMemo(
@@ -142,6 +146,30 @@ export function ProvisionDeviceForm({
     );
   }
 
+  // Checked AFTER the result?.ok branch above, on purpose: a Server
+  // Action revalidates /dashboard/devices on success, which re-runs this
+  // page's canCreateNode() check server-side with the device that was
+  // JUST created now counted — quota.ok flips to false on the very
+  // request that succeeded. If this check ran first, the success panel
+  // (and the flasher) would get replaced by a plan-limit notice right
+  // after a successful registration. Once `result` holds a real answer,
+  // it wins regardless of what quota looks like on the next render.
+  if (!quota.ok) {
+    return (
+      <div className="space-y-4">
+        <PlanLimitNotice planName={quota.planName} current={quota.current} limit={quota.limit} entity="อุปกรณ์" />
+        <div className="flex justify-end">
+          <Link
+            href="/dashboard/devices"
+            className="rounded-full border border-border hover:bg-brand-50 text-brand-800 font-medium px-5 py-2.5 text-sm transition"
+          >
+            กลับไปรายการอุปกรณ์
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="card p-6 sm:p-8 space-y-5">
       <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4 text-xs text-brand-900/80">
@@ -217,8 +245,6 @@ export function ProvisionDeviceForm({
           />
         </div>
       </div>
-
-      <input type="hidden" name="firmware_version" value="2.0.0" />
 
       {error && (
         <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">

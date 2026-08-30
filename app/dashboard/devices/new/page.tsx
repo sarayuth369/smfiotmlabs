@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { canCreateNode } from "@/lib/plan-limits";
 import { ProvisionDeviceForm } from "../_components/ProvisionDeviceForm";
-import { PlanLimitNotice } from "../../farms/_components/PlanLimitNotice";
 
 export default async function NewDevicePage({
   searchParams,
@@ -53,24 +52,7 @@ export default async function NewDevicePage({
       <p className="text-sm text-brand-900/60 mt-1">ลงทะเบียน SMF IoT Node ใหม่</p>
 
       <div className="mt-6">
-        {!check.ok ? (
-          <div className="space-y-4">
-            <PlanLimitNotice
-              planName={check.planName}
-              current={check.current}
-              limit={check.limit ?? 0}
-              entity="อุปกรณ์"
-            />
-            <div className="flex justify-end">
-              <Link
-                href="/dashboard/devices"
-                className="rounded-full border border-border hover:bg-brand-50 text-brand-800 font-medium px-5 py-2.5 text-sm transition"
-              >
-                กลับไปรายการอุปกรณ์
-              </Link>
-            </div>
-          </div>
-        ) : farmList.length === 0 ? (
+        {farmList.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="text-4xl">🌱</div>
             <div className="mt-3 font-bold text-brand-800">คุณยังไม่มีฟาร์ม</div>
@@ -90,6 +72,7 @@ export default async function NewDevicePage({
             zones={zoneList}
             initialFarmId={preFarm}
             initialZoneId={preZone ?? null}
+            quota={{ ok: check.ok, planName: check.planName, current: check.current, limit: check.limit ?? 0 }}
           />
         )}
       </div>
