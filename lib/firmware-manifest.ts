@@ -16,8 +16,23 @@ export const ESP32_S3_FLASH_OFFSETS: Record<ArtifactRole, number> = {
   bootloader: 0x0000,
   partitions: 0x8000,
   boot_app0: 0xe000,
-  app: 0x10000,
+  app: 0x10000, // ota_0 (app0) — the only app slot on a factory/pre-OTA board
 };
+
+/**
+ * app1 (ota_1) — the SECOND app slot in this board's dual-OTA partition
+ * table (verified against the compiled .pio/build partitions.bin: app0 @
+ * 0x10000, app1 @ 0x340000, both 3264K). Once a device has ever completed
+ * an OTA update, the bootloader may be running from EITHER slot — a USB/
+ * Web flash that only writes app0 can silently target the INACTIVE slot,
+ * leaving the actually-running app1 untouched (confirmed in production:
+ * device kept booting stale/wrong credentials after a "successful" USB
+ * re-flash). Every USB/Web app write must therefore write the SAME patched
+ * bytes to BOTH offsets so it's correct regardless of which slot is
+ * currently active. This is safe — esptool/Web Serial flashing happens
+ * with the chip halted in ROM bootloader mode, not executing from flash.
+ */
+export const ESP32_S3_APP_ALT_OFFSET = 0x340000;
 
 export type FirmwareArtifact = {
   role: ArtifactRole;

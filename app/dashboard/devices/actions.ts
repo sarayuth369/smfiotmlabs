@@ -14,6 +14,7 @@ import {
   type ProvisionedCredentials,
 } from "@/lib/device-provision";
 import { patchFirmware, sha256Hex } from "@/lib/firmware-patcher";
+import { ESP32_S3_APP_ALT_OFFSET } from "@/lib/firmware-manifest";
 
 const DEVICE_UID_RE = /^[A-Z0-9][A-Z0-9\-_]{2,63}$/i;
 
@@ -342,6 +343,18 @@ export async function buildProvisionFirmwareBundle(
     artifacts.push({
       role: "app",
       offset: (rel.app_offset as number) ?? 0x10000,
+      bytes_b64: Buffer.from(patched).toString("base64"),
+      size: patched.byteLength,
+      sha256: appSha,
+    });
+    // Also write the SAME patched image to the second OTA app slot
+    // (app1). A device that has ever OTA'd may currently be booting from
+    // either slot — writing only one can silently leave the actually
+    // -running slot untouched. See ESP32_S3_APP_ALT_OFFSET for the
+    // production incident this fixes.
+    artifacts.push({
+      role: "app",
+      offset: ESP32_S3_APP_ALT_OFFSET,
       bytes_b64: Buffer.from(patched).toString("base64"),
       size: patched.byteLength,
       sha256: appSha,
