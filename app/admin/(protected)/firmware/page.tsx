@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/payment";
@@ -16,6 +17,8 @@ type FirmwareRow = {
   approved_at: string | null;
   release_notes: string | null;
   created_at: string;
+  min_firmware_version: string | null;
+  rollout_percent: number | null;
 };
 
 const CHANNEL_CLS: Record<FirmwareRow["release_channel"], string> = {
@@ -31,7 +34,7 @@ export default async function AdminFirmwarePage() {
   const admin = createAdminClient();
   const { data } = await admin
     .from("firmware_releases")
-    .select("id, version, board, hardware_model, release_channel, is_latest, file_size, sha256_app, approved_at, release_notes, created_at")
+    .select("id, version, board, hardware_model, release_channel, is_latest, file_size, sha256_app, approved_at, release_notes, created_at, min_firmware_version, rollout_percent")
     .order("created_at", { ascending: false });
   const releases = (data ?? []) as FirmwareRow[];
 
@@ -43,6 +46,9 @@ export default async function AdminFirmwarePage() {
         <p className="text-sm text-brand-900/60 mt-1">
           Upload firmware artifacts → approve → set latest — user จะเห็น release ที่ approved + compatible กับ device ของตัวเอง
         </p>
+        <Link href="/admin/firmware/ota" className="inline-block mt-2 text-sm font-semibold text-brand-700 hover:underline">
+          → OTA Update Monitoring (per-device job status)
+        </Link>
       </div>
 
       <div className="mb-6">
@@ -76,12 +82,24 @@ export default async function AdminFirmwarePage() {
               {releases.map((r) => (
                 <tr key={r.id} className="hover:bg-brand-50/50">
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-brand-800">v{r.version}</div>
-                    {r.is_latest && (
-                      <div className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-600 text-white inline-block mt-1">
-                        LATEST
-                      </div>
-                    )}
+                    <div className="font-semibold text-brand-800">V{r.version}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {r.is_latest && (
+                        <div className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-600 text-white inline-block">
+                          LATEST
+                        </div>
+                      )}
+                      {(r.rollout_percent ?? 100) < 100 && (
+                        <div className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 inline-block">
+                          {r.rollout_percent}% rollout
+                        </div>
+                      )}
+                      {r.min_firmware_version && (
+                        <div className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-50 text-brand-700/80 inline-block" title="minimum firmware version required for OTA to this release">
+                          min V{r.min_firmware_version}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-mono text-xs text-brand-900/80">{r.board}</div>

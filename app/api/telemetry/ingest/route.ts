@@ -234,6 +234,50 @@ export async function POST(req: Request) {
       payload: { status: body.status, metadata: body.metadata ?? null },
     });
     await notifyDeviceOnline();
+
+    // OTA progress/result — bridge forwards smf/{c}/{d}/event/ota as
+    // event_type:"ota" (same convention as event/relay/{N} -> "relay").
+    // Additive only: never touches the generic device_events path above.
+    if (body.event_type === "ota") {
+      const meta = (body.metadata ?? {}) as Record<string, unknown>;
+      const releaseId = typeof meta.release_id === "string" ? meta.release_id : null;
+      const state = typeof meta.state === "string" ? meta.state : null;
+      const progress = typeof meta.progress === "number" ? meta.progress : null;
+      const error = typeof meta.error === "string" ? meta.error : null;
+
+      if (releaseId && state) {
+        const { data: job } = await admin
+          .from("firmware_update_jobs")
+          .select("id")
+          .eq("device_id", device.id)
+          .eq("firmware_release_id", releaseId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (job) {
+          const isTerminal = state === "success" || state === "failed";
+          await admin
+            .from("firmware_update_jobs")
+            .update({
+              state,
+              progress,
+              error_message: error,
+              ...(isTerminal ? { completed_at: new Date().toISOString() } : {}),
+            })
+            .eq("id", job.id);
+          await admin.from("firmware_update_events").insert({
+            job_id: job.id,
+            device_id: device.id,
+            state,
+            progress,
+            message: error,
+          });
+        } else {
+          console.warn("[ingest] ota event for unknown job", device.id, releaseId, state);
+        }
+      }
+    }
     // Only dispatch for a firmware-named event, never the generic
     // heartbeat fallback — heartbeats fire too often to be a useful webhook.
     if (body.event_type) {

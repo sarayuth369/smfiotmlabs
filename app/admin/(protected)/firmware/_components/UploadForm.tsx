@@ -39,6 +39,10 @@ export function UploadForm() {
   const [hardwareModel, setHardwareModel] = useState("SMF-MAIN-V1");
   const [channel, setChannel] = useState<"test" | "stable">("test");
   const [notes, setNotes] = useState("");
+  const [minFirmwareVersion, setMinFirmwareVersion] = useState("");
+  const [rolloutPercent, setRolloutPercent] = useState(100);
+  const [capabilities, setCapabilities] = useState("");
+  const [sensorTypes, setSensorTypes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -48,7 +52,7 @@ export function UploadForm() {
 
   const canSubmit = useMemo(() => {
     const hasApp = slots.find((s) => s.role === "app")?.file != null;
-    return hasApp && /^\d+\.\d+\.\d+/.test(version) && hardwareModel.length > 0 && !busy;
+    return hasApp && /^[vV]?\d+\.\d+\.\d+/.test(version) && hardwareModel.length > 0 && !busy;
   }, [slots, version, hardwareModel, busy]);
 
   const pickFile = useCallback(async (role: ArtifactRole, file: File | null) => {
@@ -120,6 +124,10 @@ export function UploadForm() {
       fd.set("hardware_model", hardwareModel.trim());
       fd.set("release_channel", channel);
       fd.set("release_notes", notes.trim());
+      fd.set("min_firmware_version", minFirmwareVersion.trim());
+      fd.set("rollout_percent", String(rolloutPercent));
+      fd.set("capabilities", capabilities.trim());
+      fd.set("sensor_types", sensorTypes.trim());
 
       fd.set("app_path", app.file!.name === app.filename ? roleToPath.app : roleToPath.app);
       fd.set("app_size", String(app.size));
@@ -153,7 +161,7 @@ export function UploadForm() {
     } finally {
       setBusy(false);
     }
-  }, [slots, version, build, board, hardwareModel, channel, notes]);
+  }, [slots, version, build, board, hardwareModel, channel, notes, minFirmwareVersion, rolloutPercent, capabilities, sensorTypes]);
 
   return (
     <div className="card p-5">
@@ -222,6 +230,55 @@ export function UploadForm() {
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             className="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm"
+            disabled={busy}
+          />
+        </label>
+
+        <label className="text-sm">
+          <span className="block text-xs font-semibold text-brand-800/80 mb-1">Min firmware version (OTA floor, optional)</span>
+          <input
+            type="text"
+            value={minFirmwareVersion}
+            onChange={(e) => setMinFirmwareVersion(e.target.value)}
+            placeholder="e.g. 1.5.0 — devices older than this can't jump straight to this release"
+            className="w-full rounded-lg border border-brand-200 px-3 py-2 font-mono text-sm"
+            disabled={busy}
+          />
+        </label>
+        <label className="text-sm">
+          <span className="block text-xs font-semibold text-brand-800/80 mb-1">Rollout % ({rolloutPercent}%)</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={rolloutPercent}
+            onChange={(e) => setRolloutPercent(Number(e.target.value))}
+            className="w-full"
+            disabled={busy}
+          />
+        </label>
+        <label className="text-sm sm:col-span-2">
+          <span className="block text-xs font-semibold text-brand-800/80 mb-1">
+            Capabilities (comma-separated, optional — e.g. automation, mqtt, ota, relay_control)
+          </span>
+          <input
+            type="text"
+            value={capabilities}
+            onChange={(e) => setCapabilities(e.target.value)}
+            className="w-full rounded-lg border border-brand-200 px-3 py-2 font-mono text-sm"
+            disabled={busy}
+          />
+        </label>
+        <label className="text-sm sm:col-span-2">
+          <span className="block text-xs font-semibold text-brand-800/80 mb-1">
+            Sensor types this release supports (comma-separated, optional — e.g. temperature, humidity, co2)
+          </span>
+          <input
+            type="text"
+            value={sensorTypes}
+            onChange={(e) => setSensorTypes(e.target.value)}
+            className="w-full rounded-lg border border-brand-200 px-3 py-2 font-mono text-sm"
             disabled={busy}
           />
         </label>

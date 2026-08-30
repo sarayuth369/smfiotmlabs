@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { CopyRow } from "./_components/CopyRow";
 import { RegenerateButton } from "./_components/RegenerateButton";
+import { OtaPanel } from "./_components/OtaPanel";
 
 // Phase 6 broker — mqtt.bkknex.com self-hosted EMQX. Env override for staging.
 const BROKER_HOST = process.env.NEXT_PUBLIC_MQTT_BROKER_HOST ?? "mqtt.bkknex.com";
@@ -23,7 +24,7 @@ export default async function DeviceMqttPage({
 
   const { data: device } = await supabase
     .from("iot_nodes")
-    .select("id, device_uid, device_name, farm_id")
+    .select("id, device_uid, device_name, farm_id, firmware_version")
     .eq("id", deviceId)
     .maybeSingle();
   if (!device) notFound();
@@ -75,6 +76,8 @@ export default async function DeviceMqttPage({
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-5">
+          <OtaPanel deviceId={deviceId} currentFirmwareVersion={(device.firmware_version as string | null) ?? null} />
+
           <div className="card p-6 space-y-4">
             <h2 className="font-bold text-brand-800">Broker Connection</h2>
             <CopyRow label="Broker Host" value={BROKER_HOST} />

@@ -83,6 +83,21 @@ export async function createFirmwareRelease(formData: FormData): Promise<CreateR
   const hardware_model = String(formData.get("hardware_model") ?? "").trim();
   const release_channel = String(formData.get("release_channel") ?? "test").trim();
   const release_notes = String(formData.get("release_notes") ?? "").trim() || null;
+  const min_firmware_version = String(formData.get("min_firmware_version") ?? "").trim() || null;
+  const rollout_percent_raw = String(formData.get("rollout_percent") ?? "100").trim();
+  const rollout_percent = Number.isFinite(Number(rollout_percent_raw)) ? Math.max(0, Math.min(100, Math.round(Number(rollout_percent_raw)))) : 100;
+
+  // Generic capability/sensor metadata — free-form, comma-separated in
+  // the UI. Never a fixed enum here on purpose: a future sensor or
+  // capability is just a new string, no code change in this action.
+  const capabilities = String(formData.get("capabilities") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const sensor_types = String(formData.get("sensor_types") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const app_path = String(formData.get("app_path") ?? "").trim();
   const app_size = parseInt(String(formData.get("app_size") ?? "0"), 10);
@@ -103,7 +118,11 @@ export async function createFirmwareRelease(formData: FormData): Promise<CreateR
   if (!release_id || !/^[0-9a-f-]{36}$/.test(release_id)) {
     return { ok: false, error: "invalid release_id" };
   }
-  if (!/^\d+\.\d+\.\d+/.test(version)) return { ok: false, error: "version must be semver" };
+  // Accept an optional leading "V"/"v" (matches the Vx.x.x label shown in
+  // the admin UI / release notes) but store bare semver, consistent with
+  // how it's already stored today — the "v" prefix is a display concern.
+  const versionClean = version.replace(/^[vV]/, "");
+  if (!/^\d+\.\d+\.\d+/.test(versionClean)) return { ok: false, error: "version must be semver, e.g. V1.2.0" };
   if (!hardware_model) return { ok: false, error: "hardware_model required" };
   if (board !== "ESP32-S3") return { ok: false, error: "board must be ESP32-S3" };
   if (!["test", "stable", "deprecated", "revoked"].includes(release_channel)) {
@@ -124,12 +143,16 @@ export async function createFirmwareRelease(formData: FormData): Promise<CreateR
   const admin = createAdminClient();
   const { error } = await admin.from("firmware_releases").insert({
     id: release_id,
-    version,
+    version: versionClean,
     build,
     board,
     hardware_model,
     release_channel,
     release_notes,
+    min_firmware_version,
+    rollout_percent,
+    capabilities,
+    sensor_types,
     sha256_app,
     file_size: total_size,
     app_path,
@@ -198,6 +221,19 @@ export async function setFirmwareLatest(releaseId: string): Promise<void> {
     .update({ is_latest: true })
     .eq("id", releaseId);
 
+  revalidatePath("/admin/firmware");
+}
+
+/**
+ * Adjust staged rollout after creation — e.g. start at 10%, watch OTA
+ * job success rate, then raise to 100%. Any approved/unapproved release
+ * can have this changed at any time.
+ */
+export async function setRolloutPercent(releaseId: string, percent: number): Promise<void> {
+  await requireModule("firmware");
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  const admin = createAdminClient();
+  await admin.from("firmware_releases").update({ rollout_percent: clamped }).eq("id", releaseId);
   revalidatePath("/admin/firmware");
 }
 
