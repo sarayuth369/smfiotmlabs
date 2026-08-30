@@ -79,6 +79,20 @@ export function ProvisionDeviceForm({
           </div>
         </div>
 
+        {emqxOk && (
+          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5">
+            <div className="text-sm font-bold text-amber-900">⚠ Password นี้จะแสดงครั้งเดียวเท่านั้น</div>
+            <p className="mt-1 text-xs text-amber-800">
+              บันทึกไว้ทันที — เก็บคู่กับ Device UID นี้. <strong>อย่ากด &quot;สร้าง Credential ใหม่&quot; ที่หน้า MQTT/Firmware ทีหลังโดยไม่จำเป็น</strong> —
+              การ regenerate จะทำให้ password ที่เพิ่ง flash เข้าบอร์ดตอนนี้ใช้ต่อไม่ได้ทันที (ต้อง re-flash ใหม่อีกรอบ)
+            </p>
+            <div className="mt-4 space-y-3">
+              <CredRow label="Username" value={result.mqtt_username} />
+              <CredRow label="Password" value={result.mqtt_password} secret />
+            </div>
+          </div>
+        )}
+
         {firmwareReady && emqxOk && (
           <ProvisionInstallFlasher
             deviceId={result.device_id}
@@ -268,5 +282,40 @@ export function ProvisionDeviceForm({
         </Link>
       </div>
     </form>
+  );
+}
+
+function CredRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
+  const [reveal, setReveal] = useState(!secret);
+  const [copied, setCopied] = useState(false);
+  return (
+    <div>
+      <div className="text-xs font-semibold text-amber-900/70 mb-1">{label}</div>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 font-mono text-sm bg-white border border-amber-200 rounded-lg px-3 py-2 break-all">
+          {reveal ? value : "•".repeat(value.length)}
+        </code>
+        {secret && (
+          <button
+            type="button"
+            onClick={() => setReveal((r) => !r)}
+            className="text-xs rounded-lg border border-amber-300 hover:bg-amber-100 px-3 py-2 font-medium text-amber-900"
+          >
+            {reveal ? "🙈" : "👁"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+          className="text-xs rounded-lg border border-amber-300 hover:bg-amber-100 px-3 py-2 font-medium text-amber-900"
+        >
+          {copied ? "✓" : "Copy"}
+        </button>
+      </div>
+    </div>
   );
 }
