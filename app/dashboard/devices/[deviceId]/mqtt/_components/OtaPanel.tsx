@@ -135,7 +135,12 @@ export function OtaPanel({ deviceId, currentFirmwareVersion }: { deviceId: strin
 
       {jobActive && (
         <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-          <div className="text-sm font-semibold text-blue-800">{STATE_LABEL[job!.state] ?? job!.state}</div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-blue-800">{STATE_LABEL[job!.state] ?? job!.state}</div>
+            {job!.progress != null && (
+              <div className="text-sm font-bold text-blue-800 tabular-nums">{job!.progress}%</div>
+            )}
+          </div>
           {job!.progress != null && (
             <div className="mt-2 h-2 rounded-full bg-blue-100 overflow-hidden">
               <div className="h-full bg-blue-600 transition-all" style={{ width: `${job!.progress}%` }} />
