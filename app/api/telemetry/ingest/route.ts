@@ -228,6 +228,32 @@ export async function POST(req: Request) {
       patch.firmware_version = body.firmware_version;
     }
     await admin.from("iot_nodes").update(patch).eq("id", device.id);
+
+    // Reconcile any stuck OTA job against the version this heartbeat just
+    // reported. The device's own event/ota "success" report can get lost
+    // in the brief window right after an OTA reboot reconnects (observed
+    // in practice — MQTT session still settling); the regular heartbeat
+    // firmware_version is far more reliable, so use it as a backstop: if
+    // it already matches an in-flight job's target, that job is done,
+    // regardless of whether its own success event ever arrived.
+    if (typeof body.firmware_version === "string") {
+      const { data: pendingJob } = await admin
+        .from("firmware_update_jobs")
+        .select("id, to_version")
+        .eq("device_id", device.id)
+        .eq("to_version", body.firmware_version)
+        .in("state", ["requested", "downloading", "verifying", "installing", "rebooting", "health_check"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (pendingJob) {
+        await admin
+          .from("firmware_update_jobs")
+          .update({ state: "success", progress: 100, completed_at: new Date().toISOString() })
+          .eq("id", pendingJob.id);
+      }
+    }
+
     await admin.from("device_events").insert({
       device_id: device.id,
       event_type: body.event_type ?? "heartbeat",
