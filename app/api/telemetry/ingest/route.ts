@@ -239,7 +239,10 @@ export async function POST(req: Request) {
     // event_type:"ota" (same convention as event/relay/{N} -> "relay").
     // Additive only: never touches the generic device_events path above.
     if (body.event_type === "ota") {
-      const meta = (body.metadata ?? {}) as Record<string, unknown>;
+      // Generic event/{subtype} topics arrive as `payload` (see
+      // bridge.js's `parsed.kind === "event"` branch), not `metadata` —
+      // `metadata` is only populated on the status-heartbeat path above.
+      const meta = (body.payload ?? body.metadata ?? {}) as Record<string, unknown>;
       const releaseId = typeof meta.release_id === "string" ? meta.release_id : null;
       const state = typeof meta.state === "string" ? meta.state : null;
       const progress = typeof meta.progress === "number" ? meta.progress : null;
