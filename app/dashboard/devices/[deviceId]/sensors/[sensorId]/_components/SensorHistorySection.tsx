@@ -26,7 +26,16 @@ export function SensorHistorySection({
   initialSummary: HistorySummary;
 }) {
   const [enabled, setEnabled] = useState(initialSummary.recordHistory);
-  const [interval, setInterval_] = useState(initialSummary.intervalMinutes);
+  // Sensors saved before the option list was trimmed to 10/30/60 may still
+  // hold an old value (e.g. 5 or 15) that the server now rejects — snap it
+  // to the closest valid option instead of sending the stale one back.
+  const [interval, setInterval_] = useState(
+    INTERVALS.includes(initialSummary.intervalMinutes)
+      ? initialSummary.intervalMinutes
+      : INTERVALS.reduce((closest, m) =>
+          Math.abs(m - initialSummary.intervalMinutes) < Math.abs(closest - initialSummary.intervalMinutes) ? m : closest
+        )
+  );
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
