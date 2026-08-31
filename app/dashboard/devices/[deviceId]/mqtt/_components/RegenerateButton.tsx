@@ -101,7 +101,7 @@ export function RegenerateButton({ deviceId }: { deviceId: string }) {
               <strong>Flutter app</strong>: MQTT Broker → Host <code className="font-mono">mqtt.bkknex.com</code> Port <code>8883</code> TLS ON, Username + Password ข้างบน → Save → เชื่อมต่อใหม่
             </div>
             <div className="text-amber-900/70">
-              EMQX broker activation = อัตโนมัติผ่าน webhook (mqtt.bkknex.com:8443). ไม่ต้อง SSH หรือ manual config.
+              ระบบเปิดใช้งาน credential ใหม่ให้อัตโนมัติ ไม่ต้องตั้งค่าเพิ่มเติม
             </div>
           </div>
 

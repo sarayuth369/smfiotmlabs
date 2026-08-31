@@ -9,7 +9,6 @@ import {
   generateUniqueDeviceUid,
   generateDeviceCredentials,
   buildSecretsHFile,
-  buildEmqxActivationCommand,
   activateOnEmqxWebhook,
   type ProvisionedCredentials,
 } from "@/lib/device-provision";
@@ -255,7 +254,6 @@ export type ProvisionResult =
       mqtt_topic_prefix: string;
       customer_identity_id: string;
       secrets_h_content: string;
-      emqx_activation_command: string;
       emqx_activation:
         | { ok: true; user: string; acl_rules: number }
         | { ok: false; error: string };
@@ -524,7 +522,6 @@ export async function provisionDevice(formData: FormData): Promise<ProvisionResu
     mqtt_topic_prefix: creds.mqtt_topic_prefix,
     customer_identity_id,
     secrets_h_content: buildSecretsHFile(creds, customer_identity_id),
-    emqx_activation_command: buildEmqxActivationCommand(creds, customer_identity_id),
     emqx_activation: activation.ok
       ? { ok: true, user: activation.user, acl_rules: activation.acl_rules }
       : { ok: false, error: activation.error },

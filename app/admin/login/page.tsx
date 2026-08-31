@@ -75,10 +75,6 @@ export default function AdminLoginPage() {
               {pending ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </button>
           </form>
-
-          <p className="mt-6 text-center text-xs text-brand-900/50">
-            ครั้งแรก: <span className="font-semibold">admin / 11223344</span> — ระบบจะสร้าง Super Admin อัตโนมัติ
-          </p>
         </div>
       </div>
     </div>

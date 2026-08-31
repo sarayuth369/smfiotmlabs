@@ -29,7 +29,7 @@ export default async function MqttOverviewPage() {
     <div>
       <h1 className="text-2xl font-bold text-brand-800 mb-1">MQTT / Bridge</h1>
       <p className="text-sm text-brand-900/60 mb-4">
-        บริหาร mqtt.bkknex.com (EMQX) + smf-mqtt-bridge-prod — Phase 6.8
+        บริหาร mqtt.bkknex.com (EMQX) + smf-mqtt-bridge-prod
       </p>
       <MqttSubnav active="overview" />
 

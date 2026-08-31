@@ -115,22 +115,6 @@ export function buildSecretsHFile(creds: ProvisionedCredentials, customer_identi
 }
 
 /**
- * Build shell command the operator runs on VPS to activate the device
- * in EMQX (fallback if webhook unavailable). Idempotent.
- */
-export function buildEmqxActivationCommand(
-  creds: ProvisionedCredentials,
-  customer_identity_id: string
-): string {
-  return [
-    "sudo /opt/smf-iot/emqx/create-device.sh",
-    "'" + creds.device_uid + "'",
-    "'" + creds.mqtt_password + "'",
-    "'" + customer_identity_id + "'",
-  ].join(" ");
-}
-
-/**
  * Call the provisioning webhook on the VPS to auto-create EMQX user + ACL.
  * Requires env vars PROV_WEBHOOK_URL + PROV_WEBHOOK_TOKEN.
  * Returns {ok:true} on success (idempotent — safe to retry).

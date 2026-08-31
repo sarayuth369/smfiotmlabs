@@ -67,7 +67,7 @@ export default async function DeviceMqttPage({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-brand-800">MQTT / Firmware</h1>
         <p className="text-sm text-brand-900/60 mt-1">
-          ข้อมูลเชื่อมต่อ MQTT (Phase 6 multi-tenant) — <span className="font-mono">{deviceUid}</span>
+          ข้อมูลเชื่อมต่อ MQTT — <span className="font-mono">{deviceUid}</span>
         </p>
         <p className="text-xs text-brand-900/50 mt-1">
           บอร์ด ESP32 เสีย / เปลี่ยนบอร์ดใหม่? กด &quot;สร้าง Credential ใหม่&quot; ด้านล่าง แล้ว flash ต่อในหน้าเดียวกันได้เลย — ไม่ต้องสร้างอุปกรณ์ใหม่, NODE นี้ยังคงเดิมทุกอย่าง
@@ -89,7 +89,7 @@ export default async function DeviceMqttPage({
             <CopyRow label="Client ID" value={deviceUid} />
             <CopyRow label="Customer UUID" value={customerUuid} />
             <p className="text-xs text-brand-900/55 border-t border-border pt-3">
-              TLS ใช้ Let&apos;s Encrypt ISRG Root X1. Client ID = device_uid (ฝัง firmware ที่ ProvisioningSlot ตอน Web USB flash). Customer UUID ใช้ตอนตั้งค่า Flutter app (Phase 6 — Multi-tenant scope).
+              TLS ใช้ Let&apos;s Encrypt ISRG Root X1. Client ID = device_uid (ฝัง firmware ที่ ProvisioningSlot ตอน Web USB flash). Customer UUID ใช้ตอนตั้งค่า Flutter app.
             </p>
           </div>
 
@@ -169,10 +169,10 @@ export default async function DeviceMqttPage({
 
           <div className="card p-5">
             <div className="text-xs font-bold text-green-800 uppercase tracking-wider mb-2">
-              ✓ Phase 6 Production Broker
+              ✓ Production Broker
             </div>
             <p className="text-xs text-brand-900/70">
-              Self-hosted EMQX ที่ <code className="font-mono">mqtt.bkknex.com</code>. Provisioning + ACL auto ตอน &quot;เพิ่มอุปกรณ์&quot; ผ่าน webhook (Vercel → VPS:8443). ไม่ต้อง manual config.
+              Self-hosted EMQX ที่ <code className="font-mono">mqtt.bkknex.com</code>. Provisioning + ACL ตั้งค่าอัตโนมัติตอน &quot;เพิ่มอุปกรณ์&quot; ไม่ต้อง manual config.
             </p>
           </div>
 

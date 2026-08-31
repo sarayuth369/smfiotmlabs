@@ -104,20 +104,21 @@ export function ProvisionDeviceForm({
 
         {!firmwareReady && (
           <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            <strong>⚠ Base firmware ไม่พร้อม.</strong> Admin ต้อง upload firmware.bin ที่ <Link href="/admin/firmware" className="underline">/admin/firmware</Link> ก่อน (SMF-MAIN-V1 v2.0.0, channel stable/test, approve + set latest).
-            <div className="mt-2 text-xs">Device UID ถูกลงทะเบียนแล้ว — หลัง upload firmware, กลับมาที่หน้านี้ + provision device ใหม่ (device_uid นี้ใช้แล้ว, ต้อง generate ใหม่)</div>
+            <strong>⚠ เฟิร์มแวร์ยังไม่พร้อมใช้งานในขณะนี้</strong>
+            <div className="mt-2 text-xs">อุปกรณ์ลงทะเบียนสำเร็จแล้ว กรุณาลองใหม่อีกครั้งในภายหลัง หรือติดต่อทีมงานหากยังพบปัญหา</div>
           </div>
         )}
 
         {!emqxOk && (
           <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
-            <strong>⚠ EMQX activation ล้มเหลว.</strong> Device MQTT credential ยังไม่ active. ตรวจ webhook + ลอง provision ใหม่ (device_uid ถูกใช้แล้ว)
+            <strong>⚠ การเชื่อมต่อ MQTT ยังไม่พร้อมใช้งาน</strong>
+            <div className="mt-2 text-xs">กรุณาลองลงทะเบียนอุปกรณ์ใหม่อีกครั้ง หรือติดต่อทีมงานหากยังพบปัญหา</div>
           </div>
         )}
 
         <details className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
           <summary className="text-sm font-semibold text-brand-800 cursor-pointer">
-            🔧 Advanced: manual secrets.h download + SSH activation (legacy fallback)
+            🔧 ขั้นสูง: ดาวน์โหลด secrets.h (สำหรับ flash ด้วยตัวเอง)
           </summary>
           <div className="mt-3 space-y-3 text-xs text-brand-900/80">
             <div>
@@ -129,16 +130,6 @@ export function ProvisionDeviceForm({
             >
               ⬇ Download secrets-{result.device_uid}.h
             </button>
-            {!emqxOk && (
-              <>
-                <div>
-                  <strong>Manual EMQX activation</strong> — copy command แล้ว SSH ไปที่ VPS:
-                </div>
-                <div className="font-mono text-[11px] bg-brand-900/95 text-white/90 rounded-lg p-3 break-all">
-                  {result.emqx_activation_command}
-                </div>
-              </>
-            )}
           </div>
         </details>
 
@@ -187,7 +178,7 @@ export function ProvisionDeviceForm({
   return (
     <form onSubmit={onSubmit} className="card p-6 sm:p-8 space-y-5">
       <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4 text-xs text-brand-900/80">
-        <strong>Phase 6 Multi-Tenant Provisioning:</strong> Device UID + MQTT password จะสร้างอัตโนมัติ. ระบบจะแสดง credentials ครั้งเดียวหลัง register — ต้อง download <code>secrets.h</code> ทันที
+        <strong>ลงทะเบียนอุปกรณ์:</strong> Device UID + MQTT password จะสร้างอัตโนมัติ. ระบบจะแสดง credentials ครั้งเดียวหลัง register — ต้อง download <code>secrets.h</code> ทันที
       </div>
 
       <div>
