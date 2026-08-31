@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/payment";
+import { computeDeviceStatus, DEVICE_OFFLINE_THRESHOLD_SEC } from "@/lib/device-status";
 
 type DeviceRow = {
   id: string;
@@ -11,6 +12,7 @@ type DeviceRow = {
   status: "online" | "offline" | "warning";
   firmware_version: string | null;
   hardware_version: string | null;
+  rssi: number | null;
   is_disabled: boolean;
   archived_at: string | null;
   last_seen: string | null;
@@ -18,13 +20,15 @@ type DeviceRow = {
   farms: { name: string; user_id: string } | { name: string; user_id: string }[] | null;
 };
 
-const STATUS_CLS: Record<DeviceRow["status"], string> = {
+const STATUS_CLS: Record<"online" | "offline" | "warning" | "never_connected", string> = {
   online: "bg-green-100 text-green-800",
   offline: "bg-brand-100 text-brand-700/70",
   warning: "bg-amber-100 text-amber-800",
+  never_connected: "bg-brand-100 text-brand-700/50",
 };
 
 const PAGE_SIZE = 25;
+const STALE_MS = DEVICE_OFFLINE_THRESHOLD_SEC * 1000;
 
 export default async function AdminDevicesPage({
   searchParams,
@@ -43,7 +47,7 @@ export default async function AdminDevicesPage({
   let query = admin
     .from("iot_nodes")
     .select(
-      "id, device_uid, device_name, farm_id, status, firmware_version, hardware_version, is_disabled, archived_at, last_seen, created_at, farms(name, user_id)",
+      "id, device_uid, device_name, farm_id, status, firmware_version, hardware_version, rssi, is_disabled, archived_at, last_seen, created_at, farms(name, user_id)",
       { count: "exact" }
     );
 
@@ -62,12 +66,16 @@ export default async function AdminDevicesPage({
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // Health stats
-  const [{ count: onlineCount }, { count: offlineCount }, { count: disabledCount }] = await Promise.all([
-    admin.from("iot_nodes").select("id", { count: "exact", head: true }).eq("status", "online").is("archived_at", null),
-    admin.from("iot_nodes").select("id", { count: "exact", head: true }).eq("status", "offline").is("archived_at", null),
+  // Health stats — online count uses the same last_seen freshness check as
+  // the table rows (see effectiveStatus), not the possibly-stale stored
+  // status column.
+  const staleCutoff = new Date(Date.now() - STALE_MS).toISOString();
+  const [{ count: onlineCount }, { count: totalActive }, { count: disabledCount }] = await Promise.all([
+    admin.from("iot_nodes").select("id", { count: "exact", head: true }).eq("status", "online").gte("last_seen", staleCutoff).is("archived_at", null),
+    admin.from("iot_nodes").select("id", { count: "exact", head: true }).is("archived_at", null),
     admin.from("iot_nodes").select("id", { count: "exact", head: true }).eq("is_disabled", true).is("archived_at", null),
   ]);
+  const offlineCount = (totalActive ?? 0) - (onlineCount ?? 0);
 
   const pageHref = (p: number) => {
     const qs = new URLSearchParams();
@@ -154,6 +162,7 @@ export default async function AdminDevicesPage({
                 <th className="px-4 py-3">Device</th>
                 <th className="px-4 py-3">Farm</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">WiFi</th>
                 <th className="px-4 py-3">Firmware</th>
                 <th className="px-4 py-3">Last Seen</th>
                 <th className="px-4 py-3">Created</th>
@@ -162,6 +171,7 @@ export default async function AdminDevicesPage({
             <tbody className="divide-y divide-brand-100">
               {devices.map((d) => {
                 const farm = Array.isArray(d.farms) ? d.farms[0] : d.farms;
+                const status = computeDeviceStatus(d.status, d.last_seen);
                 return (
                   <tr key={d.id} className="hover:bg-brand-50/50">
                     <td className="px-4 py-3">
@@ -179,10 +189,13 @@ export default async function AdminDevicesPage({
                           Archived
                         </span>
                       ) : (
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_CLS[d.status]}`}>
-                          {d.status}
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_CLS[status]}`}>
+                          {status}
                         </span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-brand-900/70 text-xs">
+                      {status === "online" && d.rssi != null ? `📶 ${d.rssi} dBm` : "-"}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-brand-900/70">
                       {d.firmware_version ?? "-"}

@@ -227,6 +227,10 @@ export async function POST(req: Request) {
     if (typeof body.firmware_version === "string") {
       patch.firmware_version = body.firmware_version;
     }
+    const metaRssi = (body.metadata as Record<string, unknown> | null)?.rssi;
+    if (typeof metaRssi === "number") {
+      patch.rssi = metaRssi;
+    }
     await admin.from("iot_nodes").update(patch).eq("id", device.id);
 
     // Reconcile any stuck OTA job against the version this heartbeat just

@@ -17,6 +17,7 @@ type Device = {
   model: string | null;
   status: "online" | "offline" | "warning";
   firmware_version: string | null;
+  rssi: number | null;
   last_seen: string | null;
   archived_at: string | null;
   created_at: string;
@@ -52,7 +53,7 @@ export default async function DeviceDetailPage({
   // RLS ensures user can only SELECT devices in their own farms
   const { data } = await supabase
     .from("iot_nodes")
-    .select("id, device_uid, device_name, farm_id, zone_id, device_type, model, status, firmware_version, last_seen, archived_at, created_at, updated_at, farms(name), zones(name)")
+    .select("id, device_uid, device_name, farm_id, zone_id, device_type, model, status, firmware_version, rssi, last_seen, archived_at, created_at, updated_at, farms(name), zones(name)")
     .eq("id", deviceId)
     .maybeSingle();
 
@@ -79,6 +80,7 @@ export default async function DeviceDetailPage({
     model: string | null;
     status: Device["status"];
     firmware_version: string | null;
+    rssi: number | null;
     last_seen: string | null;
     archived_at: string | null;
     created_at: string;
@@ -260,6 +262,12 @@ export default async function DeviceDetailPage({
                       ({new Date(raw.last_seen).toLocaleString("th-TH")})
                     </span>
                   )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-brand-900/55">ระดับสัญญาณ WiFi</dt>
+                <dd className="font-semibold text-brand-800 mt-0.5">
+                  {raw.rssi != null ? `📶 ${raw.rssi} dBm` : "-"}
                 </dd>
               </div>
             </dl>
