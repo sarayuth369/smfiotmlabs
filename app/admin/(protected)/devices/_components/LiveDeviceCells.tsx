@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { computeDeviceStatus } from "@/lib/device-status";
+import { WifiSignalIcon } from "@/app/_components/WifiSignalIcon";
 
 const STATUS_CLS: Record<"online" | "offline" | "warning" | "never_connected", string> = {
   online: "bg-green-100 text-green-800",
@@ -85,7 +86,14 @@ export function LiveDeviceCells({
         </span>
       </td>
       <td className="px-4 py-3 text-brand-900/70 text-xs">
-        {effective === "online" && rssi != null ? `📶 ${rssi} dBm` : "-"}
+        {effective === "online" && rssi != null ? (
+          <span className="inline-flex items-center gap-1">
+            <WifiSignalIcon />
+            {rssi} dBm
+          </span>
+        ) : (
+          "-"
+        )}
       </td>
     </>
   );
