@@ -97,6 +97,9 @@ export default async function DevicesPage({
           <p className="text-sm text-brand-900/60 mt-1">
             SMF IoT Node ทุกตัวในทุกฟาร์มของคุณ
           </p>
+          <Link href="/dashboard/device-health" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:text-brand-900 underline mt-1">
+            สุขภาพอุปกรณ์ →
+          </Link>
         </div>
         {view === "active" && addBtn}
       </div>
