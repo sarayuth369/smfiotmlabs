@@ -50,12 +50,6 @@ export function SystemTimeCard() {
           </div>
         </div>
       </div>
-
-      <p className="mt-4 text-xs text-brand-900/50">
-        Server รันบน UTC โดยพื้นฐาน (Vercel) แต่ทุกเวลาที่แสดงในระบบ ทั้งฝั่งแอดมินและผู้ใช้
-        ถูกแปลงเป็นเวลาไทย (Asia/Bangkok, GMT+7) แบบถาวรแล้ว จึงไม่มีปุ่มสลับ time zone แยกต่างหาก
-        เพราะระบบนี้ให้บริการเฉพาะประเทศไทย การเพิ่มปุ่มสลับไป time zone อื่นจะไม่มีผลใช้งานจริง
-      </p>
     </div>
   );
 }
