@@ -90,6 +90,9 @@ export default async function FarmDevicesPage({
           <p className="text-sm text-brand-900/60 mt-1">
             SMF IoT Node ในฟาร์ม <span className="font-semibold">{farm.name}</span>
           </p>
+          <Link href={`/dashboard/device-health?farm=${farmId}`} className="inline-flex items-center gap-1 text-sm text-brand-700 hover:text-brand-900 underline mt-1">
+            สุขภาพอุปกรณ์ →
+          </Link>
         </div>
         {view === "active" && addBtn}
       </div>

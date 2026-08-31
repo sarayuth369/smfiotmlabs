@@ -194,6 +194,12 @@ export default async function DashboardPage() {
             >
               เปิดฟาร์ม
             </Link>
+            <Link
+              href="/dashboard/device-health"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 hover:border-brand-400 text-brand-800 text-xs font-semibold px-3.5 py-2 transition"
+            >
+              สุขภาพอุปกรณ์
+            </Link>
           </div>
         </div>
 
