@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/device-health-sweep",
-      "schedule": "*/5 * * * *"
+      "schedule": "15 3 * * *"
     }
   ]
 }
