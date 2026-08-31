@@ -63,7 +63,7 @@ export default async function AdminSupportPage() {
             {recentEscalations.map((e) => (
               <div key={e.id} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
                 <div className="font-semibold text-amber-900">{e.escalation_reason || "ไม่ระบุเหตุผล"}</div>
-                <div className="text-xs text-amber-800/70 mt-0.5">{e.escalated_at ? new Date(e.escalated_at as string).toLocaleString("th-TH") : ""}</div>
+                <div className="text-xs text-amber-800/70 mt-0.5">{e.escalated_at ? new Date(e.escalated_at as string).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : ""}</div>
               </div>
             ))}
           </div>

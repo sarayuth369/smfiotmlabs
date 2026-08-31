@@ -18,6 +18,7 @@ export function computeNextExpiry(
 
 export function formatThaiDate(iso: string): string {
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -26,6 +27,7 @@ export function formatThaiDate(iso: string): string {
 
 export function formatThaiDateTime(iso: string): string {
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "short",
     day: "numeric",

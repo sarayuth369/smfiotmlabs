@@ -264,7 +264,7 @@ export default async function DeviceDetailPage({
                   {formatLastSeenRelative(raw.last_seen)}
                   {raw.last_seen && (
                     <span className="ml-1 text-xs text-brand-900/50 font-normal">
-                      ({new Date(raw.last_seen).toLocaleString("th-TH")})
+                      ({new Date(raw.last_seen).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })})
                     </span>
                   )}
                 </dd>

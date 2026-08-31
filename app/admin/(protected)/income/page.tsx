@@ -24,6 +24,7 @@ const CATEGORY_COLOR: Record<IncomeCategory, string> = {
 function fmtDay(day: string): string {
   const [y, m, d] = day.split("-").map(Number);
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "short",
     day: "numeric",

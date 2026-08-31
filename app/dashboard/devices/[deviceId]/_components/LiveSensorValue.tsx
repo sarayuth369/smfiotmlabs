@@ -68,7 +68,7 @@ export function LiveSensorValue({
 
   const displayUnit = unit ?? fallbackUnit;
   const displayValue = Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const timeStr = occurredAt ? new Date(occurredAt).toLocaleTimeString("th-TH") : "";
+  const timeStr = occurredAt ? new Date(occurredAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok" }) : "";
 
   if (size === "lg") {
     return (

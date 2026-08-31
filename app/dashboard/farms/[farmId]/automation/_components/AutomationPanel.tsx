@@ -454,7 +454,7 @@ export function AutomationPanel({
                 </span>
                 <span className="text-brand-900/80">{rulesById.get(log.rule_id) ?? "(ลบแล้ว)"}</span>
                 {log.skip_reason && <span className="text-brand-900/40">— {log.skip_reason}</span>}
-                <span className="text-brand-900/40 ml-auto">{new Date(log.executed_at).toLocaleString("th-TH")}</span>
+                <span className="text-brand-900/40 ml-auto">{new Date(log.executed_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}</span>
               </div>
             ))}
           </div>

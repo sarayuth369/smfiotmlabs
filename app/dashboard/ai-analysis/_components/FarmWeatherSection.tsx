@@ -71,7 +71,7 @@ const DAY_LABELS = ["วันนี้", "พรุ่งนี้"];
 function formatDayLabel(dateStr: string, idx: number): string {
   if (idx < DAY_LABELS.length) return DAY_LABELS[idx];
   const d = new Date(dateStr);
-  return d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
+  return d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short" });
 }
 
 export function FarmWeatherSection({
@@ -190,7 +190,7 @@ export function FarmWeatherSection({
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-border text-[11px] text-brand-900/40">
-              อัปเดตล่าสุด {new Date(data.weather.fetched_at).toLocaleString("th-TH")} · ข้อมูลจาก Open-Meteo
+              อัปเดตล่าสุด {new Date(data.weather.fetched_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · ข้อมูลจาก Open-Meteo
             </div>
           </div>
 

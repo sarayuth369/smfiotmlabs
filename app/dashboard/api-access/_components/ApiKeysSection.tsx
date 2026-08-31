@@ -180,8 +180,8 @@ export function ApiKeysSection({
                   {k.scope_device_ids ? ` · ${k.scope_device_ids.length} device` : " · ทุกอุปกรณ์"}
                 </div>
                 <div className="text-[11px] text-brand-900/40 mt-0.5">
-                  สร้าง {new Date(k.created_at).toLocaleDateString("th-TH")} · ใช้ล่าสุด{" "}
-                  {k.last_used_at ? new Date(k.last_used_at).toLocaleString("th-TH") : "ยังไม่เคยใช้"}
+                  สร้าง {new Date(k.created_at).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" })} · ใช้ล่าสุด{" "}
+                  {k.last_used_at ? new Date(k.last_used_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : "ยังไม่เคยใช้"}
                 </div>
               </div>
               {!k.revoked_at && (

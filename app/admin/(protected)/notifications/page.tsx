@@ -30,6 +30,7 @@ const CHANNEL_OPTIONS = [
 
 function fmtDate(iso: string) {
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "short",
     day: "numeric",

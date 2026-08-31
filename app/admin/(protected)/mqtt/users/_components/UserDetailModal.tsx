@@ -96,7 +96,7 @@ export function UserDetailModal({ username, onClose }: { username: string; onClo
                 <div className="space-y-1.5">
                   {detail.sessions.map((s) => (
                     <div key={s.clientid} className="text-xs font-mono bg-brand-50/60 border border-brand-100 rounded-lg px-2.5 py-1.5">
-                      {s.clientid} · {s.ip_address ?? "-"} · {s.connected_at ? new Date(s.connected_at).toLocaleString("th-TH") : "-"}
+                      {s.clientid} · {s.ip_address ?? "-"} · {s.connected_at ? new Date(s.connected_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : "-"}
                     </div>
                   ))}
                 </div>

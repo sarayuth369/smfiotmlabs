@@ -13,6 +13,7 @@ export type NotificationItem = {
 
 function fmtDate(iso: string) {
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     month: "short",
     day: "numeric",
     hour: "2-digit",

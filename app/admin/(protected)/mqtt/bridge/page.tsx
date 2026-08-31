@@ -35,7 +35,7 @@ function BridgeCard({ bridge, readOnly }: { bridge: BridgeStatus; readOnly: bool
             <div>
               <dt className="text-xs text-brand-900/55">Started</dt>
               <dd className="font-semibold text-brand-800 mt-0.5">
-                {bridge.started_at ? new Date(bridge.started_at).toLocaleString("th-TH") : "-"}
+                {bridge.started_at ? new Date(bridge.started_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : "-"}
               </dd>
             </div>
             <div>
