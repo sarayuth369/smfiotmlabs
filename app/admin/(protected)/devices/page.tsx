@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/payment";
-import { computeDeviceStatus, DEVICE_OFFLINE_THRESHOLD_SEC } from "@/lib/device-status";
+import { DEVICE_OFFLINE_THRESHOLD_SEC } from "@/lib/device-status";
+import { LiveDeviceCells } from "./_components/LiveDeviceCells";
 
 type DeviceRow = {
   id: string;
@@ -18,13 +19,6 @@ type DeviceRow = {
   last_seen: string | null;
   created_at: string;
   farms: { name: string; user_id: string } | { name: string; user_id: string }[] | null;
-};
-
-const STATUS_CLS: Record<"online" | "offline" | "warning" | "never_connected", string> = {
-  online: "bg-green-100 text-green-800",
-  offline: "bg-brand-100 text-brand-700/70",
-  warning: "bg-amber-100 text-amber-800",
-  never_connected: "bg-brand-100 text-brand-700/50",
 };
 
 const PAGE_SIZE = 25;
@@ -171,7 +165,6 @@ export default async function AdminDevicesPage({
             <tbody className="divide-y divide-brand-100">
               {devices.map((d) => {
                 const farm = Array.isArray(d.farms) ? d.farms[0] : d.farms;
-                const status = computeDeviceStatus(d.status, d.last_seen);
                 return (
                   <tr key={d.id} className="hover:bg-brand-50/50">
                     <td className="px-4 py-3">
@@ -179,24 +172,14 @@ export default async function AdminDevicesPage({
                       <div className="font-mono text-xs text-brand-900/55">{d.device_uid}</div>
                     </td>
                     <td className="px-4 py-3 text-brand-900/80">{farm?.name ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      {d.is_disabled ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-red-100 text-red-800">
-                          Disabled
-                        </span>
-                      ) : d.archived_at ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                          Archived
-                        </span>
-                      ) : (
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${STATUS_CLS[status]}`}>
-                          {status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-brand-900/70 text-xs">
-                      {status === "online" && d.rssi != null ? `📶 ${d.rssi} dBm` : "-"}
-                    </td>
+                    <LiveDeviceCells
+                      deviceId={d.id}
+                      isDisabled={d.is_disabled}
+                      isArchived={!!d.archived_at}
+                      initialStatus={d.status}
+                      initialRssi={d.rssi}
+                      initialLastSeen={d.last_seen}
+                    />
                     <td className="px-4 py-3 font-mono text-xs text-brand-900/70">
                       {d.firmware_version ?? "-"}
                       {d.hardware_version && <div className="text-[10px] text-brand-900/50">HW: {d.hardware_version}</div>}

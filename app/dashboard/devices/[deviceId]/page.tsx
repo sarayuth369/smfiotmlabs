@@ -6,6 +6,7 @@ import { canCreateSensor } from "@/lib/plan-limits";
 import { getSensorTypeCatalog, sensorTypeIconFrom, sensorTypeLabelFrom } from "@/lib/sensor-types";
 import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
 import { LiveSensorValue } from "./_components/LiveSensorValue";
+import { LiveWifiSignal } from "./_components/LiveWifiSignal";
 
 type Device = {
   id: string;
@@ -267,7 +268,7 @@ export default async function DeviceDetailPage({
               <div>
                 <dt className="text-xs text-brand-900/55">ระดับสัญญาณ WiFi</dt>
                 <dd className="font-semibold text-brand-800 mt-0.5">
-                  {raw.rssi != null ? `📶 ${raw.rssi} dBm` : "-"}
+                  <LiveWifiSignal deviceId={raw.id} initialRssi={raw.rssi} />
                 </dd>
               </div>
             </dl>
