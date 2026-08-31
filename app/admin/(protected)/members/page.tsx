@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/payment";
 import { updateMember } from "./actions";
 import { DeleteMemberButton } from "./_components/DeleteMemberButton";
+import { SuspendMemberButton } from "./_components/SuspendMemberButton";
 
 type Member = {
   id: string;
@@ -12,6 +13,7 @@ type Member = {
   phone: string | null;
   plan: "starter" | "pro" | "business" | "enterprise" | null;
   plan_expires_at: string | null;
+  account_status: "active" | "suspended" | null;
   provider: string | null;
   created_at: string;
 };
@@ -50,7 +52,7 @@ export default async function MembersPage({
   let query = admin
     .from("profiles")
     .select(
-      "id, email, full_name, phone, plan, plan_expires_at, provider, created_at",
+      "id, email, full_name, phone, plan, plan_expires_at, account_status, provider, created_at",
       { count: "exact" }
     );
 
@@ -146,6 +148,11 @@ export default async function MembersPage({
                         หมดอายุ {formatThaiDateTime(m.plan_expires_at)}
                       </div>
                     )}
+                    {m.account_status === "suspended" && (
+                      <div className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-red-600 text-white">
+                        Suspended
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -192,6 +199,7 @@ export default async function MembersPage({
                     />
                   </div>
                   <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 justify-end">
+                    <SuspendMemberButton userId={m.id} suspended={m.account_status === "suspended"} />
                     <DeleteMemberButton userId={m.id} email={m.email ?? m.id.slice(0, 8)} />
                     <button
                       type="submit"

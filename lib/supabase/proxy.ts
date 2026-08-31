@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 const PROTECTED_PREFIXES = ["/dashboard"];
+const SUSPENDED_MESSAGE = "บัญชีของคุณถูกระงับชั่วคราว กรุณาติดต่อฝ่าย Support";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -41,6 +42,25 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+
+  // Admin-suspended account — deny on the next authenticated request, even
+  // for a session that was already active when the suspension happened.
+  // Checked only on protected pages (not every request) to keep this cheap.
+  if (user && isProtected) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_status")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.account_status === "suspended") {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      url.searchParams.set("error", SUSPENDED_MESSAGE);
+      return NextResponse.redirect(url);
+    }
   }
 
   if (user && isAuthPage) {

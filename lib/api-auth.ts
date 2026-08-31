@@ -71,6 +71,13 @@ export async function authenticateApiRequest(req: Request): Promise<ApiAuthResul
   // avoids letting a caller enumerate which keys are valid-but-revoked.
   if (!row || row.revoked_at) return fail(401, "invalid API key");
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("account_status")
+    .eq("id", row.user_id as string)
+    .maybeSingle();
+  if (profile?.account_status === "suspended") return fail(403, "account suspended");
+
   const plan = await getUserPlan(admin, row.user_id as string);
   if (!hasFeature(plan, "api")) return fail(403, "API Access is not available on your current plan");
 

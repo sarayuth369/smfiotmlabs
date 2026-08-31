@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { invalidateUserEntitlementCache } from "@/lib/subscription-cache";
 
 const PLANS = ["starter", "pro", "business", "enterprise"] as const;
 type Plan = (typeof PLANS)[number];
@@ -42,6 +43,42 @@ export async function updateMember(userId: string, formData: FormData): Promise<
   const { error } = await admin.from("profiles").update(update).eq("id", userId);
   if (error) console.warn("[admin.members.update] db error", error);
 
+  revalidatePath("/admin/members");
+}
+
+/**
+ * Admin suspend/unsuspend — deliberately separate from `plan`/`plan_expires_at`
+ * (subscription expiry). Suspension never touches subscription fields, and
+ * subscription expiry never touches account_status — the two are
+ * independent, per spec.
+ */
+export async function suspendMember(userId: string): Promise<void> {
+  await requireModule("members");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ account_status: "suspended", suspended_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) {
+    console.warn("[admin.members.suspend] db error", error);
+  } else {
+    await invalidateUserEntitlementCache(admin, userId);
+  }
+  revalidatePath("/admin/members");
+}
+
+export async function unsuspendMember(userId: string): Promise<void> {
+  await requireModule("members");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ account_status: "active", suspended_at: null })
+    .eq("id", userId);
+  if (error) {
+    console.warn("[admin.members.unsuspend] db error", error);
+  } else {
+    await invalidateUserEntitlementCache(admin, userId);
+  }
   revalidatePath("/admin/members");
 }
 

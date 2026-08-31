@@ -41,13 +41,26 @@ function LoginForm() {
     const password = String(form.get("password") || "");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setLoading(false);
       setError(mapAuthError(error.message));
       return;
     }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_status")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (profile?.account_status === "suspended") {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("บัญชีของคุณถูกระงับชั่วคราว กรุณาติดต่อฝ่าย Support");
+      return;
+    }
+
     router.replace(next);
     router.refresh();
   }
