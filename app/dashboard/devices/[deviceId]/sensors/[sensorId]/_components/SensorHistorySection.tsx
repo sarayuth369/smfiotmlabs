@@ -6,7 +6,7 @@ import { getSensorHistoryPoints } from "../history-actions";
 import type { HistoryPoint, HistorySummary } from "../history-actions";
 import { SvgLineChart } from "@/app/dashboard/_components/SvgLineChart";
 
-const INTERVALS = [5, 10, 15, 30, 60];
+const INTERVALS = [10, 30, 60];
 const PERIODS: { key: "1h" | "6h" | "24h" | "7d"; label: string }[] = [
   { key: "1h", label: "1 ชั่วโมง" },
   { key: "6h", label: "6 ชั่วโมง" },

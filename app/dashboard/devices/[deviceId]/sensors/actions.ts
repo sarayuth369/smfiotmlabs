@@ -11,7 +11,7 @@ import {
   type SensorTypeInfo,
 } from "@/lib/sensor-types";
 
-const HISTORY_INTERVALS = [5, 10, 15, 30, 60] as const;
+const HISTORY_INTERVALS = [10, 30, 60] as const;
 
 const STATUSES = ["active", "inactive"] as const;
 type Status = (typeof STATUSES)[number];

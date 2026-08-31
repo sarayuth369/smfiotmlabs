@@ -103,6 +103,6 @@ export async function getSensorHistorySummary(
     retentionDays: plan.limits.sensor_history_days,
     planName: plan.name,
     recordHistory: !!sensorRow?.record_history,
-    intervalMinutes: (sensorRow?.history_interval_minutes as number) ?? 5,
+    intervalMinutes: (sensorRow?.history_interval_minutes as number) ?? 10,
   };
 }
