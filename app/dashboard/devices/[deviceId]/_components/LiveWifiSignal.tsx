@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { WifiSignalIcon } from "@/app/_components/WifiSignalIcon";
+import { useDeviceOnline } from "./DeviceOnlineProvider";
 
 /**
  * Polls iot_nodes.rssi every 5s — same cadence/pattern as LiveSensorValue
@@ -38,7 +39,8 @@ export function LiveWifiSignal({
     };
   }, [deviceId]);
 
-  if (rssi == null) return <>-</>;
+  const online = useDeviceOnline();
+  if (!online || rssi == null) return <>-</>;
   return (
     <span className="inline-flex items-center gap-1">
       <WifiSignalIcon />

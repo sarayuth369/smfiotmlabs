@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useDeviceOnline } from "./DeviceOnlineProvider";
 
 /**
  * Polls sensor_readings_latest every 5s for a single sensor.
@@ -56,9 +57,12 @@ export function LiveSensorValue({
     };
   }, [sensorId]);
 
-  if (value === null) {
+  const online = useDeviceOnline();
+  if (value === null || !online) {
     return (
-      <div className="text-sm text-brand-900/40 italic">— ยังไม่มีข้อมูล —</div>
+      <div className="text-sm text-brand-900/40 italic">
+        {online ? "— ยังไม่มีข้อมูล —" : "— อุปกรณ์ออฟไลน์ —"}
+      </div>
     );
   }
 

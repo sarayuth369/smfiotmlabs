@@ -7,6 +7,7 @@ import { getSensorTypeCatalog, sensorTypeIconFrom, sensorTypeLabelFrom } from "@
 import { computeDeviceStatus, formatLastSeenRelative } from "@/lib/device-status";
 import { LiveSensorValue } from "./_components/LiveSensorValue";
 import { LiveWifiSignal } from "./_components/LiveWifiSignal";
+import { DeviceOnlineProvider } from "./_components/DeviceOnlineProvider";
 
 type Device = {
   id: string;
@@ -135,7 +136,10 @@ export default async function DeviceDetailPage({
     ])
   );
 
+  const isOnlineNow = computeDeviceStatus(raw.status, raw.last_seen) === "online";
+
   return (
+    <DeviceOnlineProvider deviceId={raw.id} initialOnline={isOnlineNow}>
     <div>
       <div className="flex items-center gap-2 text-sm text-brand-700/70 mb-2">
         <Link href="/dashboard/devices" className="hover:text-brand-900">← อุปกรณ์ IoT</Link>
@@ -429,5 +433,6 @@ export default async function DeviceDetailPage({
         )}
       </section>
     </div>
+    </DeviceOnlineProvider>
   );
 }

@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/payment";
 import { getSensorTypeCatalog, sensorTypeLabelFrom, sensorTypeIconFrom, defaultUnitFrom } from "@/lib/sensor-types";
 import { LiveSensorValue } from "../../_components/LiveSensorValue";
+import { DeviceOnlineProvider } from "../../_components/DeviceOnlineProvider";
+import { computeDeviceStatus } from "@/lib/device-status";
 import { SensorHistorySection } from "./_components/SensorHistorySection";
 import { getSensorHistorySummary } from "./history-actions";
 
@@ -20,7 +22,7 @@ export default async function SensorDetailPage({
 
   const { data } = await supabase
     .from("sensors")
-    .select("id, device_id, name, sensor_type, unit, description, channel, status, archived_at, created_at, updated_at, iot_nodes!inner(id, device_uid, device_name, farm_id, zone_id, farms!inner(id, user_id, name), zones(id, name))")
+    .select("id, device_id, name, sensor_type, unit, description, channel, status, archived_at, created_at, updated_at, iot_nodes!inner(id, device_uid, device_name, farm_id, zone_id, status, last_seen, farms!inner(id, user_id, name), zones(id, name))")
     .eq("id", sensorId)
     .eq("device_id", deviceId)
     .maybeSingle();
@@ -52,6 +54,8 @@ export default async function SensorDetailPage({
       device_name: string;
       farm_id: string;
       zone_id: string | null;
+      status: string;
+      last_seen: string | null;
       farms: { id: string; user_id: string; name: string } | { id: string; user_id: string; name: string }[];
       zones: { id: string; name: string } | { id: string; name: string }[] | null;
     } | Array<{
@@ -60,6 +64,8 @@ export default async function SensorDetailPage({
       device_name: string;
       farm_id: string;
       zone_id: string | null;
+      status: string;
+      last_seen: string | null;
       farms: { id: string; user_id: string; name: string } | { id: string; user_id: string; name: string }[];
       zones: { id: string; name: string } | { id: string; name: string }[] | null;
     }>;
@@ -77,8 +83,10 @@ export default async function SensorDetailPage({
   const unit = raw.unit ?? (defaultUnitFrom(sensorTypeCatalog, raw.sensor_type) || "-");
 
   const historySummary = await getSensorHistorySummary(deviceId, sensorId);
+  const isOnlineNow = computeDeviceStatus(device.status, device.last_seen) === "online";
 
   return (
+    <DeviceOnlineProvider deviceId={device.id} initialOnline={isOnlineNow}>
     <div>
       <div className="flex items-center gap-2 text-sm text-brand-700/70 mb-2">
         <Link href={`/dashboard/devices/${deviceId}`} className="hover:text-brand-900">
@@ -218,5 +226,6 @@ export default async function SensorDetailPage({
         </aside>
       </div>
     </div>
+    </DeviceOnlineProvider>
   );
 }
