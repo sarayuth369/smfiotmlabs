@@ -41,8 +41,11 @@ export async function getSubscriptionState(
   const stored_grace = (data?.grace_period_end as string | null) ?? null;
   const auto_renew = !!(data?.auto_renew as boolean | null);
 
-  // Starter / enterprise have no expiry — always active
-  if (set_plan === "starter" || set_plan === "enterprise" || !expires_at) {
+  // Enterprise (no expiry concept) or an account with no expires_at set at
+  // all — always active. This also covers legacy Starter accounts created
+  // before Starter Free got a 1-year clock (never backfilled — see
+  // Starter Free renewal below for accounts that DO have one).
+  if (set_plan === "enterprise" || !expires_at) {
     return {
       set_plan,
       effective_plan: set_plan,
@@ -66,6 +69,21 @@ export async function getSubscriptionState(
       expires_at,
       grace_period_end: stored_grace,
       days_remaining,
+      auto_renew,
+    };
+  }
+
+  // Starter Free has no grace period — self-renewal is free and instant
+  // (see renewStarterFree), so there's no need to buffer telemetry loss
+  // the way paid plans do. Expires straight to "expired".
+  if (set_plan === "starter") {
+    return {
+      set_plan,
+      effective_plan: "starter",
+      status: "expired",
+      expires_at,
+      grace_period_end: null,
+      days_remaining: 0,
       auto_renew,
     };
   }

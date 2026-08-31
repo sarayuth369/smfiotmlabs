@@ -31,7 +31,7 @@ export type UserPlan = {
 
 /** Used only when subscription_plans row is missing / DB unreachable */
 const FALLBACK_LIMITS: Record<PlanId, PlanLimits> = {
-  starter: { max_farms: 1, max_zones: 2, max_nodes: 1, max_sensors: 5, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0, max_ai_analyses_per_month: 0, max_ai_chat_per_month: 0, max_automation_rules: 0 },
+  starter: { max_farms: 1, max_zones: 1, max_nodes: 1, max_sensors: 2, max_relays: 2, sensor_history_days: 7, max_api_keys: 0, api_rate_limit_per_min: 0, max_ai_analyses_per_month: 0, max_ai_chat_per_month: 0, max_automation_rules: 0 },
   pro: { max_farms: 5, max_zones: 20, max_nodes: 30, max_sensors: null, max_relays: 4, sensor_history_days: 90, max_api_keys: 3, api_rate_limit_per_min: 60, max_ai_analyses_per_month: 30, max_ai_chat_per_month: 60, max_automation_rules: 10 },
   business: { max_farms: 20, max_zones: 100, max_nodes: 200, max_sensors: null, max_relays: 8, sensor_history_days: 365, max_api_keys: 10, api_rate_limit_per_min: 300, max_ai_analyses_per_month: 150, max_ai_chat_per_month: 300, max_automation_rules: 50 },
   enterprise: { max_farms: null, max_zones: null, max_nodes: null, max_sensors: null, max_relays: null, sensor_history_days: null, max_api_keys: 25, api_rate_limit_per_min: 600, max_ai_analyses_per_month: null, max_ai_chat_per_month: null, max_automation_rules: null },

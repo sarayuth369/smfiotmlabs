@@ -13,6 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { evaluateReadingAgainstRules } from "@/lib/automation";
 import { dispatchWebhookEvent } from "@/lib/webhooks";
 import { applyDeviceHealth } from "@/lib/device-health";
+import { isDeviceEntitledToIngest } from "@/lib/subscription-cache";
 import {
   checkDeviceRateLimit,
   checkCustomerRateLimit,
@@ -164,6 +165,15 @@ export async function POST(req: Request) {
   }
   if (device.is_disabled) return json({ ok: false, error: "device disabled" }, 403);
   if (device.archived_at) return json({ ok: false, error: "device archived" }, 403);
+
+  // Starter Free expiry / subscription enforcement — earliest practical
+  // point before any telemetry write. Covers both the status-only and
+  // readings branches below (both return before this if not entitled, so
+  // neither writes last_seen, device_events, nor sensor data).
+  const entitled = await isDeviceEntitledToIngest(admin, device.id as string, device.farm_id as string);
+  if (!entitled) {
+    return json({ ok: false, error: "subscription expired" }, 402);
+  }
 
   // Phase 6.13 — was this device offline before THIS message? (checked
   // before any update below overwrites last_seen). Only matters for the
