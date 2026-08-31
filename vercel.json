@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/sensor-history-cleanup",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/device-health-sweep",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

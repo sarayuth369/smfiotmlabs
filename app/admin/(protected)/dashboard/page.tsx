@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireModule } from "@/lib/admin/current";
 import { formatThaiDate } from "@/lib/payment";
@@ -71,6 +72,11 @@ export default async function AdminDashboard() {
     enterprise: await safeCount("profiles", (q: any) => q.eq("plan", "enterprise")),
   };
 
+  const dhHealthy = await safeCount("device_health", (q: any) => q.eq("status", "healthy"));
+  const dhWarning = await safeCount("device_health", (q: any) => q.eq("status", "warning"));
+  const dhCritical = await safeCount("device_health", (q: any) => q.eq("status", "critical"));
+  const dhOffline = await safeCount("device_health", (q: any) => q.eq("status", "offline"));
+
   return (
     <div>
       <div className="mb-6">
@@ -85,6 +91,32 @@ export default async function AdminDashboard() {
         <Kpi label="Hardware Orders" value={`${paidHardware.toLocaleString()} / ${totalHardwareOrders.toLocaleString()}`} sub="paid / total" />
         <Kpi label="Monthly Revenue" value={`฿${monthlyRevenue.toLocaleString()}`} sub={`ตั้งแต่ ${formatThaiDate(monthStart.toISOString())}`} />
       </div>
+
+      {/* Device Health */}
+      <section className="mt-8 card p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-brand-800">Device Health</h2>
+          <Link href="/admin/device-health" className="text-sm text-brand-700 hover:text-brand-900 underline">ดูทั้งหมด →</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <div className="text-xs text-brand-900/55">Healthy</div>
+            <div className="text-2xl font-bold text-green-700">{dhHealthy.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-xs text-brand-900/55">Warning</div>
+            <div className="text-2xl font-bold text-amber-700">{dhWarning.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-xs text-brand-900/55">Critical</div>
+            <div className="text-2xl font-bold text-red-700">{dhCritical.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-xs text-brand-900/55">Offline</div>
+            <div className="text-2xl font-bold text-brand-700/70">{dhOffline.toLocaleString()}</div>
+          </div>
+        </div>
+      </section>
 
       {/* Plan breakdown */}
       <section className="mt-8 grid lg:grid-cols-3 gap-6">

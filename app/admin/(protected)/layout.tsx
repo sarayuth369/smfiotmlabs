@@ -10,6 +10,7 @@ const NAV: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", mod: "dashboard" },
   { href: "/admin/members", label: "Users Management", mod: "members" },
   { href: "/admin/devices", label: "IoT Devices", mod: "devices" },
+  { href: "/admin/device-health", label: "Device Health", mod: "devices" },
   { href: "/admin/firmware", label: "Firmware", mod: "firmware" },
   { href: "/admin/sensors", label: "Sensors", mod: "sensors" },
   { href: "/admin/ai", label: "AI Analysis", mod: "ai" },

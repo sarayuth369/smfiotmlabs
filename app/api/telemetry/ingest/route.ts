@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { evaluateReadingAgainstRules } from "@/lib/automation";
 import { dispatchWebhookEvent } from "@/lib/webhooks";
+import { applyDeviceHealth } from "@/lib/device-health";
 import {
   checkDeviceRateLimit,
   checkCustomerRateLimit,
@@ -325,6 +326,15 @@ export async function POST(req: Request) {
         });
       }
     }
+
+    // Targeted single-device health evaluation — never fleet-wide, never
+    // allowed to fail the ingest response.
+    try {
+      await applyDeviceHealth(admin, device.id as string);
+    } catch (e) {
+      console.warn("[ingest] device-health error (status)", device.id, (e as Error).message);
+    }
+
     return json({
       ok: true,
       device_uid: body.device_uid,
@@ -517,6 +527,12 @@ export async function POST(req: Request) {
       // Never let rule-engine failure poison ingestion
       console.warn("[telemetry.ingest] rule engine error", (e as Error).message);
     }
+  }
+
+  try {
+    await applyDeviceHealth(admin, device.id as string);
+  } catch (e) {
+    console.warn("[ingest] device-health error (telemetry)", device.id, (e as Error).message);
   }
 
   return json({
