@@ -151,7 +151,7 @@ export default async function AdminNotificationsPage() {
                     type="checkbox"
                     name="channels"
                     value={opt.value}
-                    defaultChecked={opt.value === "web"}
+                    defaultChecked={opt.value === "web" || opt.value === "mobile"}
                     className="rounded border-border text-brand-600 focus:ring-brand-500/30"
                   />
                   {opt.label}
