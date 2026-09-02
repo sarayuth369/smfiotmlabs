@@ -145,7 +145,23 @@ export default async function AdminDeviceDetailPage({
                   <span className="font-mono text-brand-900/80">
                     {j.from_version ? `V${j.from_version} → ` : ""}V{j.to_version}
                   </span>
-                  {j.progress != null && <span className="text-brand-900/50">{j.progress}%</span>}
+                  {j.progress != null && (
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className="w-16 h-1.5 rounded-full bg-brand-100 overflow-hidden">
+                        <span
+                          className={`block h-full rounded-full transition-all ${
+                            j.state === "success"
+                              ? "bg-green-500"
+                              : j.state === "failed" || j.state === "timeout" || j.state === "rolled_back"
+                                ? "bg-red-500"
+                                : "bg-blue-500"
+                          }`}
+                          style={{ width: `${j.progress}%` }}
+                        />
+                      </span>
+                      <span className="text-brand-900/50 tabular-nums">{j.progress}%</span>
+                    </span>
+                  )}
                   <span className="ml-auto text-brand-900/50">{formatThaiDateTime(j.created_at as string)}</span>
                 </div>
               ))}
