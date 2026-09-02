@@ -7,7 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { publishToDevice } from "@/lib/device-mqtt";
 import { ADMIN_COMMAND_TYPES, type AdminCommandType } from "@/lib/device-commands";
 
-export type SendCommandResult = { ok: true; command_id: string } | { ok: false; error: string };
+export type SendCommandResult =
+  | { ok: true; command_id: string; debug?: Record<string, unknown> }
+  | { ok: false; error: string; debug?: Record<string, unknown> };
 
 /**
  * Every server-side command send verifies: admin session (requireModule),
@@ -46,7 +48,7 @@ export async function sendAdminDeviceCommand(
   if (!customerUuid) return { ok: false, error: "device owner missing customer_identity_id" };
 
   const commandId = randomUUID();
-  const { error: insErr } = await admin.from("device_commands").insert({
+  const { error: insErr, status: insStatusCode } = await admin.from("device_commands").insert({
     id: commandId,
     device_id: device.id,
     user_id: null,
@@ -55,7 +57,22 @@ export async function sendAdminDeviceCommand(
     payload: {},
     status: "pending",
   });
-  if (insErr) return { ok: false, error: insErr.message };
+  if (insErr) {
+    return {
+      ok: false,
+      error: insErr.message,
+      debug: { stage: "insert", insErr, insStatusCode, commandId, deviceRowId: device.id },
+    };
+  }
+
+  // TEMP diagnostic — confirms the row actually landed before we even try
+  // to publish, since the client is currently reporting success while the
+  // row seems to never appear in the history table.
+  const { data: verifyRow, error: verifyErr } = await admin
+    .from("device_commands")
+    .select("id, device_id, status")
+    .eq("id", commandId)
+    .maybeSingle();
 
   const publish = await publishToDevice(customerUuid, device.device_uid as string, "admin_cmd", {
     command_id: commandId,
@@ -67,10 +84,10 @@ export async function sendAdminDeviceCommand(
       .update({ status: "failed", error_message: publish.error, completed_at: new Date().toISOString() })
       .eq("id", commandId);
     revalidatePath(`/admin/devices/${deviceId}`);
-    return { ok: false, error: publish.error };
+    return { ok: false, error: publish.error, debug: { stage: "publish", commandId, verifyRow, verifyErr } };
   }
 
   await admin.from("device_commands").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", commandId);
   revalidatePath(`/admin/devices/${deviceId}`);
-  return { ok: true, command_id: commandId };
+  return { ok: true, command_id: commandId, debug: { commandId, deviceRowId: device.id, verifyRow, verifyErr } };
 }

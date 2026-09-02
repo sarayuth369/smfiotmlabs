@@ -17,7 +17,7 @@ export function RemoteCommandPanel({ deviceId }: { deviceId: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [pendingType, setPendingType] = useState<AdminCommandType | null>(null);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; debug?: unknown } | null>(null);
 
   function send(commandType: AdminCommandType) {
     const confirmMsg = CONFIRM_MESSAGE[commandType];
@@ -29,8 +29,8 @@ export function RemoteCommandPanel({ deviceId }: { deviceId: string }) {
       const r = await sendAdminDeviceCommand(deviceId, commandType);
       setMsg(
         r.ok
-          ? { ok: true, text: `ส่งคำสั่ง "${ADMIN_COMMAND_LABEL[commandType]}" แล้ว — ดูผลที่ Command History ด้านล่าง` }
-          : { ok: false, text: r.error }
+          ? { ok: true, text: `ส่งคำสั่ง "${ADMIN_COMMAND_LABEL[commandType]}" แล้ว — ดูผลที่ Command History ด้านล่าง`, debug: r.debug }
+          : { ok: false, text: r.error, debug: r.debug }
       );
       setPendingType(null);
       router.refresh();
@@ -79,6 +79,11 @@ export function RemoteCommandPanel({ deviceId }: { deviceId: string }) {
       {msg && (
         <div className={`text-xs rounded-lg px-3 py-2 ${msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
           {msg.text}
+          {msg.debug != null && (
+            <pre className="mt-2 whitespace-pre-wrap break-all text-[10px] bg-black/5 rounded-lg p-2">
+              {JSON.stringify(msg.debug, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>
