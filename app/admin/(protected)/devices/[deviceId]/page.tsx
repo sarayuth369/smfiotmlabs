@@ -6,6 +6,7 @@ import { formatThaiDateTime } from "@/lib/payment";
 import { effectiveCommandStatus, ADMIN_COMMAND_LABEL, type AdminCommandType } from "@/lib/device-commands";
 import { RemoteCommandPanel } from "./_components/RemoteCommandPanel";
 import { OtaRequestForm } from "./_components/OtaRequestForm";
+import { LiveOtaHistory, type OtaJob } from "./_components/LiveOtaHistory";
 
 const STATUS_CLS: Record<string, string> = {
   online: "bg-green-100 text-green-800",
@@ -20,20 +21,6 @@ const CMD_STATUS_CLS: Record<string, string> = {
   running: "bg-blue-100 text-blue-800",
   success: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
-  timeout: "bg-red-100 text-red-800",
-};
-
-const JOB_STATE_CLS: Record<string, string> = {
-  requested: "bg-brand-100 text-brand-700",
-  downloading: "bg-blue-100 text-blue-800",
-  verifying: "bg-blue-100 text-blue-800",
-  installing: "bg-blue-100 text-blue-800",
-  rebooting: "bg-blue-100 text-blue-800",
-  health_check: "bg-blue-100 text-blue-800",
-  success: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  rolled_back: "bg-red-100 text-red-800",
-  cancelled: "bg-brand-100 text-brand-700/60",
   timeout: "bg-red-100 text-red-800",
 };
 
@@ -133,41 +120,7 @@ export default async function AdminDeviceDetailPage({
         </p>
         <OtaRequestForm deviceId={deviceId} releases={releases as { id: string; version: string; release_channel: string }[]} />
 
-        {jobs.length > 0 && (
-          <div className="mt-4 border-t border-brand-100 pt-4">
-            <div className="text-xs font-bold uppercase tracking-wider text-brand-900/60 mb-2">ประวัติ OTA (ล่าสุด 10)</div>
-            <div className="space-y-1.5">
-              {jobs.map((j) => (
-                <div key={j.id} className="flex items-center gap-2 text-xs">
-                  <span className={`shrink-0 font-bold uppercase px-2 py-0.5 rounded-full ${JOB_STATE_CLS[j.state as string] ?? "bg-brand-100 text-brand-700"}`}>
-                    {j.state}
-                  </span>
-                  <span className="font-mono text-brand-900/80">
-                    {j.from_version ? `V${j.from_version} → ` : ""}V{j.to_version}
-                  </span>
-                  {j.progress != null && (
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-16 h-1.5 rounded-full bg-brand-100 overflow-hidden">
-                        <span
-                          className={`block h-full rounded-full transition-all ${
-                            j.state === "success"
-                              ? "bg-green-500"
-                              : j.state === "failed" || j.state === "timeout" || j.state === "rolled_back"
-                                ? "bg-red-500"
-                                : "bg-blue-500"
-                          }`}
-                          style={{ width: `${j.progress}%` }}
-                        />
-                      </span>
-                      <span className="text-brand-900/50 tabular-nums">{j.progress}%</span>
-                    </span>
-                  )}
-                  <span className="ml-auto text-brand-900/50">{formatThaiDateTime(j.created_at as string)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <LiveOtaHistory deviceId={deviceId} initialJobs={jobs as OtaJob[]} />
       </div>
 
       <div className="card p-6 mt-5">
