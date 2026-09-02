@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireModule } from "@/lib/admin/current";
 import { getLineSettings, isLineReady } from "@/lib/admin/settings";
+import { isFcmReady } from "@/lib/fcm";
 import { sendAnnouncement, deleteAnnouncement } from "./actions";
 
 type Announcement = {
@@ -12,6 +13,8 @@ type Announcement = {
   status: string;
   line_error: string | null;
   web_recipients_count: number | null;
+  mobile_recipients_count: number | null;
+  mobile_error: string | null;
   created_at: string;
 };
 
@@ -26,6 +29,7 @@ const PLAN_OPTIONS = [
 const CHANNEL_OPTIONS = [
   { value: "web", label: "Web Notification (Dashboard)" },
   { value: "line", label: "LINE Group" },
+  { value: "mobile", label: "Mobile Push (แอป)" },
 ];
 
 function fmtDate(iso: string) {
@@ -64,6 +68,7 @@ export default async function AdminNotificationsPage() {
 
   const list = (anns ?? []) as Announcement[];
   const lineReady = isLineReady(line);
+  const mobileReady = isFcmReady();
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -81,6 +86,11 @@ export default async function AdminNotificationsPage() {
             ไปตั้งค่า LINE
           </a>{" "}
           ก่อนใช้ช่องทางนี้
+        </div>
+      )}
+      {!mobileReady && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          ⚠️ Mobile Push ยังไม่ถูกตั้งค่า — ต้องตั้งค่า Firebase (FIREBASE_SERVICE_ACCOUNT_JSON) ก่อนใช้ช่องทางนี้
         </div>
       )}
 
@@ -148,6 +158,9 @@ export default async function AdminNotificationsPage() {
                   {opt.value === "line" && !lineReady && (
                     <span className="text-[10px] text-amber-700 font-semibold">(ยังไม่ตั้งค่า)</span>
                   )}
+                  {opt.value === "mobile" && !mobileReady && (
+                    <span className="text-[10px] text-amber-700 font-semibold">(ยังไม่ตั้งค่า)</span>
+                  )}
                 </label>
               ))}
             </div>
@@ -192,15 +205,23 @@ export default async function AdminNotificationsPage() {
                       ))}
                       {a.channels.map((c) => (
                         <span key={c} className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-white border border-border text-brand-800">
-                          {c === "web" ? "🖥 web" : "💬 line"}
+                          {c === "web" ? "🖥 web" : c === "line" ? "💬 line" : "📱 mobile"}
                         </span>
                       ))}
                     </div>
 
                     <div className="mt-2 text-xs text-brand-900/60">
                       Web recipients: <span className="font-semibold">{a.web_recipients_count ?? 0}</span>
+                      {a.channels.includes("mobile") && (
+                        <span className="ml-3">
+                          Mobile recipients: <span className="font-semibold">{a.mobile_recipients_count ?? 0}</span>
+                        </span>
+                      )}
                       {a.line_error && (
                         <span className="ml-3 text-red-700">LINE error: {a.line_error}</span>
+                      )}
+                      {a.mobile_error && (
+                        <span className="ml-3 text-red-700">Mobile error: {a.mobile_error}</span>
                       )}
                     </div>
                   </div>

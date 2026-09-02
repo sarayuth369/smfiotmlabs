@@ -5,9 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireModule } from "@/lib/admin/current";
 import { getLineSettings, isLineReady } from "@/lib/admin/settings";
 import { broadcastLineText, pushLineText } from "@/lib/line";
+import { isFcmReady, sendFcmMulticast } from "@/lib/fcm";
 
 const VALID_PLANS = ["starter", "pro", "business", "enterprise"] as const;
-const VALID_CHANNELS = ["web", "line"] as const;
+const VALID_CHANNELS = ["web", "line", "mobile"] as const;
 
 export async function sendAnnouncement(formData: FormData): Promise<void> {
   const session = await requireModule("notifications");
@@ -60,6 +61,8 @@ export async function sendAnnouncement(formData: FormData): Promise<void> {
 
   let webCount = 0;
   let lineError: string | null = null;
+  let mobileCount = 0;
+  let mobileError: string | null = null;
 
   // Web fanout
   if (channels.includes("web")) {
@@ -103,17 +106,63 @@ export async function sendAnnouncement(formData: FormData): Promise<void> {
     }
   }
 
-  const status = lineError
-    ? channels.includes("web") && webCount > 0
-      ? "partial"
-      : "failed"
-    : "sent";
+  // Mobile push (FCM) — reuses the same target-user resolution as the
+  // web fanout above, just reads device_push_tokens instead of writing
+  // to notifications (that row already exists from the web fanout, or
+  // would if "web" were also checked — mobile delivery is independent
+  // of whether "web" was selected, matching "channels are additive").
+  if (channels.includes("mobile")) {
+    if (!isFcmReady()) {
+      mobileError = "Firebase ยังไม่ถูกตั้งค่า (FIREBASE_SERVICE_ACCOUNT_JSON)";
+    } else {
+      let tq = admin.from("profiles").select("id");
+      if (!isAll) tq = tq.in("plan", targetPlans);
+      const { data: targetUsers } = await tq;
+      const userIds = (targetUsers ?? []).map((u: { id: string }) => u.id as string);
+
+      if (userIds.length > 0) {
+        const { data: tokenRows } = await admin
+          .from("device_push_tokens")
+          .select("token")
+          .in("user_id", userIds)
+          .eq("is_active", true);
+        const tokens = [...new Set((tokenRows ?? []).map((t) => t.token as string))];
+
+        const deadTokens: string[] = [];
+        const chunk = 500; // FCM's own multicast limit
+        for (let i = 0; i < tokens.length; i += chunk) {
+          const batch = tokens.slice(i, i + chunk);
+          const res = await sendFcmMulticast(batch, title, message);
+          if (res.ok) {
+            mobileCount += res.sentCount;
+            deadTokens.push(...res.invalidTokens);
+          } else if (!mobileError) {
+            mobileError = res.error;
+          }
+        }
+        // Best-effort cleanup of tokens FCM says are permanently dead
+        // (uninstalled app, etc.) — never blocks the send result above.
+        if (deadTokens.length > 0) {
+          await admin.from("device_push_tokens").update({ is_active: false }).in("token", deadTokens);
+        }
+      }
+    }
+  }
+
+  const anyFailed = !!lineError || !!mobileError;
+  const anySucceeded =
+    (channels.includes("web") && webCount > 0) ||
+    (channels.includes("mobile") && mobileCount > 0) ||
+    (channels.includes("line") && !lineError);
+  const status = anyFailed ? (anySucceeded ? "partial" : "failed") : "sent";
 
   await admin
     .from("announcements")
     .update({
       web_recipients_count: webCount,
       line_error: lineError,
+      mobile_recipients_count: mobileCount,
+      mobile_error: mobileError,
       status,
     })
     .eq("id", ann.id);
