@@ -15,26 +15,12 @@ export async function GET(
 
   const { deviceId } = await params;
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data } = await admin
     .from("device_commands")
-    .select("id, command, status, requested_by, user_id, payload, result, error_message, requested_at, sent_at, acknowledged_at, completed_at")
+    .select("id, command, status, requested_by, user_id, payload, result:response, error_message, requested_at, sent_at, acknowledged_at, completed_at")
     .eq("device_id", deviceId)
     .order("requested_at", { ascending: false })
     .limit(20);
 
-  // TEMP diagnostic
-  const { count: totalUnfiltered } = await admin
-    .from("device_commands")
-    .select("id", { count: "exact", head: true });
-  const { data: sampleRows } = await admin
-    .from("device_commands")
-    .select("id, device_id")
-    .order("requested_at", { ascending: false })
-    .limit(5);
-
-  return NextResponse.json({
-    ok: true,
-    commands: data ?? [],
-    debug: { deviceIdReceived: deviceId, error, totalUnfiltered, sampleRows },
-  });
+  return NextResponse.json({ ok: true, commands: data ?? [] });
 }

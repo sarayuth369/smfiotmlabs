@@ -48,7 +48,6 @@ function formatThai(iso: string): string {
 export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: string; initialCommands: DeviceCommand[] }) {
   const [commands, setCommands] = useState(initialCommands);
   const commandsRef = useRef(commands);
-  const [debugLine, setDebugLine] = useState(`mounted with ${initialCommands.length} initial rows`);
 
   useEffect(() => {
     commandsRef.current = commands;
@@ -64,29 +63,12 @@ export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: st
       );
       if (commandsRef.current.length > 0 && !stillWaiting) {
         if (interval) clearInterval(interval);
-        setDebugLine(`stopped polling — all ${commandsRef.current.length} rows terminal`);
         return;
       }
-      let res: Response;
-      try {
-        res = await fetch(`/api/admin/devices/${deviceId}/commands`, { cache: "no-store" });
-      } catch (e) {
-        setDebugLine(`fetch threw: ${(e as Error).message}`);
-        return;
-      }
-      if (cancelled) return;
-      if (!res.ok) {
-        setDebugLine(`fetch not ok: HTTP ${res.status}`);
-        return;
-      }
+      const res = await fetch(`/api/admin/devices/${deviceId}/commands`, { cache: "no-store" });
+      if (cancelled || !res.ok) return;
       const j = await res.json();
-      if (!j.ok) {
-        setDebugLine(`api returned ok:false — ${j.error ?? "no error field"}`);
-        return;
-      }
-      setDebugLine(
-        `polled at ${new Date().toLocaleTimeString("th-TH")} — got ${j.commands.length} rows — ${JSON.stringify(j.debug)}`
-      );
+      if (!j.ok) return;
       setCommands(j.commands);
     }
 
@@ -98,17 +80,11 @@ export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: st
   }, [deviceId]);
 
   if (commands.length === 0) {
-    return (
-      <div>
-        <div className="text-sm text-brand-900/50">ยังไม่มีคำสั่งที่ส่งไปยังอุปกรณ์นี้</div>
-        <div className="mt-2 text-[10px] text-brand-900/40 font-mono whitespace-pre-wrap break-all">TEMP DEBUG: {debugLine}</div>
-      </div>
-    );
+    return <div className="text-sm text-brand-900/50">ยังไม่มีคำสั่งที่ส่งไปยังอุปกรณ์นี้</div>;
   }
 
   return (
     <div className="overflow-x-auto">
-      <div className="mb-2 text-[10px] text-brand-900/40 font-mono whitespace-pre-wrap break-all">TEMP DEBUG: {debugLine}</div>
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[10px] font-bold uppercase tracking-wider text-brand-800/70 border-b border-brand-100">

@@ -7,9 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { publishToDevice } from "@/lib/device-mqtt";
 import { ADMIN_COMMAND_TYPES, type AdminCommandType } from "@/lib/device-commands";
 
-export type SendCommandResult =
-  | { ok: true; command_id: string; debug?: Record<string, unknown> }
-  | { ok: false; error: string; debug?: Record<string, unknown> };
+export type SendCommandResult = { ok: true; command_id: string } | { ok: false; error: string };
 
 /**
  * Every server-side command send verifies: admin session (requireModule),
@@ -48,7 +46,7 @@ export async function sendAdminDeviceCommand(
   if (!customerUuid) return { ok: false, error: "device owner missing customer_identity_id" };
 
   const commandId = randomUUID();
-  const { error: insErr, status: insStatusCode } = await admin.from("device_commands").insert({
+  const { error: insErr } = await admin.from("device_commands").insert({
     id: commandId,
     device_id: device.id,
     user_id: null,
@@ -57,32 +55,7 @@ export async function sendAdminDeviceCommand(
     payload: {},
     status: "pending",
   });
-  if (insErr) {
-    return {
-      ok: false,
-      error: insErr.message,
-      debug: { stage: "insert", insErr, insStatusCode, commandId, deviceRowId: device.id },
-    };
-  }
-
-  // TEMP diagnostic — confirms the row actually landed before we even try
-  // to publish, since the client is currently reporting success while the
-  // row seems to never appear in the history table.
-  const { data: verifyRow, error: verifyErr } = await admin
-    .from("device_commands")
-    .select("id, device_id, status")
-    .eq("id", commandId)
-    .maybeSingle();
-
-  // TEMP diagnostic — exact same query shape the list/history routes run,
-  // executed right here in the same action, to see whether a list query
-  // scoped by device_id finds this row (vs. only a lookup-by-id working).
-  const { data: listRows, error: listErr } = await admin
-    .from("device_commands")
-    .select("id, command, status, requested_at")
-    .eq("device_id", device.id)
-    .order("requested_at", { ascending: false })
-    .limit(20);
+  if (insErr) return { ok: false, error: insErr.message };
 
   const publish = await publishToDevice(customerUuid, device.device_uid as string, "admin_cmd", {
     command_id: commandId,
@@ -94,14 +67,10 @@ export async function sendAdminDeviceCommand(
       .update({ status: "failed", error_message: publish.error, completed_at: new Date().toISOString() })
       .eq("id", commandId);
     revalidatePath(`/admin/devices/${deviceId}`);
-    return { ok: false, error: publish.error, debug: { stage: "publish", commandId, verifyRow, verifyErr } };
+    return { ok: false, error: publish.error };
   }
 
   await admin.from("device_commands").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", commandId);
   revalidatePath(`/admin/devices/${deviceId}`);
-  return {
-    ok: true,
-    command_id: commandId,
-    debug: { commandId, deviceRowId: device.id, verifyRow, verifyErr, listRowCount: listRows?.length ?? null, listErr, listRows },
-  };
+  return { ok: true, command_id: commandId };
 }

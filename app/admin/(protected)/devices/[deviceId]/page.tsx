@@ -38,7 +38,7 @@ export default async function AdminDeviceDetailPage({
       admin.from("device_health").select("status, health_score, last_seen_at, issues").eq("device_id", deviceId).maybeSingle(),
       admin
         .from("device_commands")
-        .select("id, command, status, requested_by, user_id, payload, result, error_message, requested_at, sent_at, acknowledged_at, completed_at")
+        .select("id, command, status, requested_by, user_id, payload, result:response, error_message, requested_at, sent_at, acknowledged_at, completed_at")
         .eq("device_id", deviceId)
         .order("requested_at", { ascending: false })
         .limit(20),

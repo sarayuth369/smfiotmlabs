@@ -291,7 +291,7 @@ export async function POST(req: Request) {
           .from("device_commands")
           .update({
             status: cmdStatus,
-            result,
+            response: result,
             ...(cmdStatus === "acknowledged" ? { acknowledged_at: new Date().toISOString() } : {}),
             ...(isTerminal ? { completed_at: new Date().toISOString() } : {}),
           })
