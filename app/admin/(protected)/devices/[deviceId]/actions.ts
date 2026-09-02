@@ -74,6 +74,16 @@ export async function sendAdminDeviceCommand(
     .eq("id", commandId)
     .maybeSingle();
 
+  // TEMP diagnostic — exact same query shape the list/history routes run,
+  // executed right here in the same action, to see whether a list query
+  // scoped by device_id finds this row (vs. only a lookup-by-id working).
+  const { data: listRows, error: listErr } = await admin
+    .from("device_commands")
+    .select("id, command, status, requested_at")
+    .eq("device_id", device.id)
+    .order("requested_at", { ascending: false })
+    .limit(20);
+
   const publish = await publishToDevice(customerUuid, device.device_uid as string, "admin_cmd", {
     command_id: commandId,
     command_type: commandType,
@@ -89,5 +99,9 @@ export async function sendAdminDeviceCommand(
 
   await admin.from("device_commands").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", commandId);
   revalidatePath(`/admin/devices/${deviceId}`);
-  return { ok: true, command_id: commandId, debug: { commandId, deviceRowId: device.id, verifyRow, verifyErr } };
+  return {
+    ok: true,
+    command_id: commandId,
+    debug: { commandId, deviceRowId: device.id, verifyRow, verifyErr, listRowCount: listRows?.length ?? null, listErr, listRows },
+  };
 }
