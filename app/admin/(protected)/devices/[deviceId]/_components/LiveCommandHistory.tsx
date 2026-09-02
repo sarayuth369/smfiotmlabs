@@ -26,6 +26,14 @@ const CMD_STATUS_CLS: Record<string, string> = {
 };
 
 const NON_TERMINAL = new Set(["pending", "sent", "acknowledged", "running"]);
+// "timeout" is a lazy DISPLAY-only status (effectiveCommandStatus computes
+// it from elapsed time — it's never actually written to the DB), so the
+// underlying command can still resolve to success/failed after crossing
+// that threshold (e.g. a reboot that takes 91s instead of <90s). Polling
+// must therefore watch the RAW status, not the display one, or it stops
+// right as a row first shows "timeout" and misses the real resolution.
+// Cap at 10 minutes so a genuinely abandoned command doesn't poll forever.
+const HARD_POLL_CAP_MS = 10 * 60_000;
 
 function formatThai(iso: string): string {
   return new Date(iso).toLocaleString("th-TH", {
@@ -58,8 +66,10 @@ export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: st
     let interval: ReturnType<typeof setInterval> | null = null;
 
     async function poll() {
-      const stillWaiting = commandsRef.current.some((c) =>
-        NON_TERMINAL.has(effectiveCommandStatus(c.command, c.status, c.requested_at))
+      const stillWaiting = commandsRef.current.some(
+        (c) =>
+          NON_TERMINAL.has(c.status) &&
+          Date.now() - new Date(c.requested_at).getTime() < HARD_POLL_CAP_MS
       );
       if (commandsRef.current.length > 0 && !stillWaiting) {
         if (interval) clearInterval(interval);
