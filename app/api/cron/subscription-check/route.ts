@@ -1,10 +1,46 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendFcmMulticast } from "@/lib/fcm";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const GRACE_DAYS = parseInt(process.env.SUBSCRIPTION_GRACE_DAYS ?? "7", 10) || 7;
+
+/**
+ * Web (existing `notifications` table, unchanged) + Mobile Push (FCM) —
+ * same two channels app/admin/(protected)/notifications/actions.ts's
+ * sendAnnouncement already uses, reused here instead of duplicated. A
+ * push failure never blocks the web notification or the caller's own
+ * expiry/grace/downgrade bookkeeping — same fire-and-forget spirit as
+ * the announcement fanout.
+ */
+async function notifyUser(
+  admin: SupabaseClient,
+  userId: string,
+  title: string,
+  message: string
+): Promise<void> {
+  await admin.from("notifications").insert({ user_id: userId, title, message });
+
+  try {
+    const { data: tokenRows } = await admin
+      .from("device_push_tokens")
+      .select("token")
+      .eq("user_id", userId)
+      .eq("is_active", true);
+    const tokens = (tokenRows ?? []).map((t) => t.token as string);
+    if (tokens.length === 0) return;
+
+    const res = await sendFcmMulticast(tokens, title, message);
+    if (res.ok && res.invalidTokens.length > 0) {
+      await admin.from("device_push_tokens").update({ is_active: false }).in("token", res.invalidTokens);
+    }
+  } catch (e) {
+    console.warn("[cron.subscription-check] push send failed", userId, (e as Error).message);
+  }
+}
 
 type ProfileRow = {
   id: string;
@@ -34,13 +70,17 @@ export async function GET(req: Request) {
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const in1d = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Scan candidates — paid plans with expiry set (starter/enterprise skipped)
+  // Scan candidates — plans with an expiry actually set. starter is
+  // excluded (its own expiry has no grace/downgrade concept — see
+  // lib/subscription.ts); enterprise is included because, unlike its
+  // default "no expiry" behaviour, an admin CAN set plan_expires_at on
+  // one manually for a fixed-term contract via /admin/members.
   const { data, error } = await admin
     .from("profiles")
     .select(
       "id, plan, plan_expires_at, grace_period_end, sub_notified_expiring_7, sub_notified_expiring_1, sub_notified_expired"
     )
-    .in("plan", ["pro", "business"])
+    .in("plan", ["pro", "business", "enterprise"])
     .not("plan_expires_at", "is", null);
 
   if (error) {
@@ -64,13 +104,14 @@ export async function GET(req: Request) {
       const exp = new Date(p.plan_expires_at).getTime();
       const nowMs = now.getTime();
 
-      // 1. Expiring in ≤7d, ≤1d — notification only
+      // 1. Expiring in ≤7d, ≤1d — notification only (web + push)
       if (exp > nowMs && p.plan_expires_at <= in7d && !p.sub_notified_expiring_7) {
-        await admin.from("notifications").insert({
-          user_id: p.id,
-          title: "แพ็กเกจใกล้หมดอายุ",
-          message: `แพ็กเกจของคุณจะหมดอายุใน ${Math.ceil((exp - nowMs) / 86400000)} วัน กรุณาต่ออายุเพื่อใช้งานต่อเนื่อง`,
-        });
+        await notifyUser(
+          admin,
+          p.id,
+          "แพ็กเกจใกล้หมดอายุ",
+          `แพ็กเกจของคุณจะหมดอายุใน ${Math.ceil((exp - nowMs) / 86400000)} วัน กรุณาต่ออายุเพื่อใช้งานต่อเนื่อง`
+        );
         await admin
           .from("profiles")
           .update({ sub_notified_expiring_7: nowIso })
@@ -79,17 +120,27 @@ export async function GET(req: Request) {
       }
 
       if (exp > nowMs && p.plan_expires_at <= in1d && !p.sub_notified_expiring_1) {
-        await admin.from("notifications").insert({
-          user_id: p.id,
-          title: "แพ็กเกจหมดอายุพรุ่งนี้",
-          message: "แพ็กเกจของคุณจะหมดอายุภายใน 24 ชั่วโมง — โปรดต่ออายุด่วน",
-        });
+        await notifyUser(
+          admin,
+          p.id,
+          "แพ็กเกจหมดอายุพรุ่งนี้",
+          "แพ็กเกจของคุณจะหมดอายุภายใน 24 ชั่วโมง — โปรดต่ออายุด่วน"
+        );
         await admin
           .from("profiles")
           .update({ sub_notified_expiring_1: nowIso })
           .eq("id", p.id);
         stats.notified_expiring_1++;
       }
+
+      // Enterprise stops here — its expiry is a manual/contract concern
+      // (an admin sets plan_expires_at by hand via /admin/members), so
+      // only the courtesy reminders above apply. getSubscriptionState()
+      // still treats enterprise as unconditionally active regardless of
+      // plan_expires_at (see lib/subscription.ts) — grace/auto-downgrade
+      // below is a pro/business-only concept and must not silently
+      // convert a real enterprise contract to Starter.
+      if (p.plan === "enterprise") continue;
 
       // 2. Just expired — start grace period (if not already started)
       if (exp <= nowMs && !p.grace_period_end) {
