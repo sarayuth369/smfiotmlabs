@@ -276,6 +276,54 @@ export async function POST(req: Request) {
     });
     await notifyDeviceOnline();
 
+    // Admin remote-command result — arrives the same way OTA's event/ota
+    // does: a generic event/{subtype} topic → body.payload, not
+    // body.metadata (that's only populated on the plain status-heartbeat
+    // path). Additive only: never touches the device_events insert above.
+    if (body.event_type === "admin_cmd") {
+      const meta = (body.payload ?? body.metadata ?? {}) as Record<string, unknown>;
+      const commandId = typeof meta.command_id === "string" ? meta.command_id : null;
+      const cmdStatus = typeof meta.status === "string" ? meta.status : null;
+      const result = (meta.result ?? null) as Record<string, unknown> | null;
+      if (commandId && cmdStatus) {
+        const isTerminal = cmdStatus === "success" || cmdStatus === "failed";
+        await admin
+          .from("device_commands")
+          .update({
+            status: cmdStatus,
+            result,
+            ...(cmdStatus === "acknowledged" ? { acknowledged_at: new Date().toISOString() } : {}),
+            ...(isTerminal ? { completed_at: new Date().toISOString() } : {}),
+          })
+          .eq("id", commandId);
+      }
+    }
+
+    // Backstop for reboot_device / restart_mqtt: the device's own final
+    // "success" can be lost in the brief post-reboot/post-reconnect
+    // settling window (same reasoning as the OTA firmware_version backstop
+    // below) — any regular heartbeat arriving while one of these commands
+    // is still 'acknowledged' is itself proof the device came back, so
+    // mark it success here instead of waiting on a report that may never
+    // arrive.
+    if (!body.event_type || body.event_type === "heartbeat") {
+      const { data: pendingCmd } = await admin
+        .from("device_commands")
+        .select("id")
+        .eq("device_id", device.id)
+        .in("command", ["reboot_device", "restart_mqtt"])
+        .eq("status", "acknowledged")
+        .order("requested_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (pendingCmd) {
+        await admin
+          .from("device_commands")
+          .update({ status: "success", completed_at: new Date().toISOString() })
+          .eq("id", pendingCmd.id);
+      }
+    }
+
     // OTA progress/result — bridge forwards smf/{c}/{d}/event/ota as
     // event_type:"ota" (same convention as event/relay/{N} -> "relay").
     // Additive only: never touches the generic device_events path above.

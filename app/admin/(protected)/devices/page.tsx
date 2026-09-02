@@ -168,7 +168,9 @@ export default async function AdminDevicesPage({
                 return (
                   <tr key={d.id} className="hover:bg-brand-50/50">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-brand-800">{d.device_name}</div>
+                      <Link href={`/admin/devices/${d.id}`} className="font-semibold text-brand-800 hover:text-brand-600 hover:underline">
+                        {d.device_name}
+                      </Link>
                       <div className="font-mono text-xs text-brand-900/55">{d.device_uid}</div>
                     </td>
                     <td className="px-4 py-3 text-brand-900/80">{farm?.name ?? "-"}</td>

@@ -13,6 +13,7 @@
 export type DeviceMqttKind =
   | "relay_cmd"
   | "ota_cmd"
+  | "admin_cmd"
   | "config_schedule"
   | "config_rules"
   | "config_schedule_status"
