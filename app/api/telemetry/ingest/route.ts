@@ -305,8 +305,11 @@ export async function POST(req: Request) {
     // below) — any regular heartbeat arriving while one of these commands
     // is still 'acknowledged' is itself proof the device came back, so
     // mark it success here instead of waiting on a report that may never
-    // arrive.
-    if (!body.event_type || body.event_type === "heartbeat") {
+    // arrive. The bridge tags a plain heartbeat as event_type "status"
+    // (not undefined, not "heartbeat") — only admin_cmd/ota carry a report
+    // this backstop must not clobber, so match by exclusion instead of
+    // guessing every possible plain-heartbeat spelling.
+    if (body.event_type !== "admin_cmd" && body.event_type !== "ota") {
       const { data: pendingCmd } = await admin
         .from("device_commands")
         .select("id")
