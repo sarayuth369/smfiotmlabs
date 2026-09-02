@@ -3,25 +3,15 @@ import { notFound } from "next/navigation";
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatThaiDateTime } from "@/lib/payment";
-import { effectiveCommandStatus, ADMIN_COMMAND_LABEL, type AdminCommandType } from "@/lib/device-commands";
 import { RemoteCommandPanel } from "./_components/RemoteCommandPanel";
 import { OtaRequestForm } from "./_components/OtaRequestForm";
 import { LiveOtaHistory, type OtaJob } from "./_components/LiveOtaHistory";
+import { LiveCommandHistory, type DeviceCommand } from "./_components/LiveCommandHistory";
 
 const STATUS_CLS: Record<string, string> = {
   online: "bg-green-100 text-green-800",
   offline: "bg-brand-100 text-brand-700/70",
   warning: "bg-amber-100 text-amber-800",
-};
-
-const CMD_STATUS_CLS: Record<string, string> = {
-  pending: "bg-brand-100 text-brand-700",
-  sent: "bg-blue-100 text-blue-800",
-  acknowledged: "bg-blue-100 text-blue-800",
-  running: "bg-blue-100 text-blue-800",
-  success: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  timeout: "bg-red-100 text-red-800",
 };
 
 export default async function AdminDeviceDetailPage({
@@ -125,57 +115,7 @@ export default async function AdminDeviceDetailPage({
 
       <div className="card p-6 mt-5">
         <h2 className="font-bold text-brand-800 mb-3">Command History (ล่าสุด 20)</h2>
-        {commands.length === 0 ? (
-          <div className="text-sm text-brand-900/50">ยังไม่มีคำสั่งที่ส่งไปยังอุปกรณ์นี้</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[10px] font-bold uppercase tracking-wider text-brand-800/70 border-b border-brand-100">
-                  <th className="py-2 pr-3">Command</th>
-                  <th className="py-2 pr-3">Requested By</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Requested</th>
-                  <th className="py-2 pr-3">Completed</th>
-                  <th className="py-2 pr-3">Result</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-50">
-                {commands.map((c) => {
-                  const status = effectiveCommandStatus(c.command as string, c.status as string, c.requested_at as string);
-                  const label = ADMIN_COMMAND_LABEL[c.command as AdminCommandType] ?? (c.command as string);
-                  return (
-                    <tr key={c.id as string}>
-                      <td className="py-2 pr-3 font-semibold text-brand-800">{label}</td>
-                      <td className="py-2 pr-3 text-brand-900/70">{(c.requested_by as string | null) ?? (c.user_id ? "user" : "-")}</td>
-                      <td className="py-2 pr-3">
-                        <span className={`font-bold uppercase px-2 py-0.5 rounded-full ${CMD_STATUS_CLS[status] ?? "bg-brand-100 text-brand-700"}`}>
-                          {status}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-3 text-brand-900/60">{formatThaiDateTime(c.requested_at as string)}</td>
-                      <td className="py-2 pr-3 text-brand-900/60">{c.completed_at ? formatThaiDateTime(c.completed_at as string) : "-"}</td>
-                      <td className="py-2 pr-3 text-brand-900/70 max-w-[320px]">
-                        {c.error_message ? (
-                          <span className="text-red-700">{c.error_message as string}</span>
-                        ) : c.result ? (
-                          <details>
-                            <summary className="cursor-pointer text-brand-700 hover:underline">ดูผลลัพธ์</summary>
-                            <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] bg-brand-50/60 rounded-lg p-2">
-                              {JSON.stringify(c.result, null, 2)}
-                            </pre>
-                          </details>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <LiveCommandHistory deviceId={deviceId} initialCommands={commands as DeviceCommand[]} />
       </div>
     </div>
   );
