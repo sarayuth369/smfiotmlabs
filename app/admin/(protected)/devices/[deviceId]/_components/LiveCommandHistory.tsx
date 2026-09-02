@@ -84,7 +84,9 @@ export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: st
         setDebugLine(`api returned ok:false — ${j.error ?? "no error field"}`);
         return;
       }
-      setDebugLine(`polled at ${new Date().toLocaleTimeString("th-TH")} — got ${j.commands.length} rows`);
+      setDebugLine(
+        `polled at ${new Date().toLocaleTimeString("th-TH")} — got ${j.commands.length} rows — ${JSON.stringify(j.debug)}`
+      );
       setCommands(j.commands);
     }
 
@@ -99,14 +101,14 @@ export function LiveCommandHistory({ deviceId, initialCommands }: { deviceId: st
     return (
       <div>
         <div className="text-sm text-brand-900/50">ยังไม่มีคำสั่งที่ส่งไปยังอุปกรณ์นี้</div>
-        <div className="mt-2 text-[10px] text-brand-900/40 font-mono">TEMP DEBUG: {debugLine}</div>
+        <div className="mt-2 text-[10px] text-brand-900/40 font-mono whitespace-pre-wrap break-all">TEMP DEBUG: {debugLine}</div>
       </div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <div className="mb-2 text-[10px] text-brand-900/40 font-mono">TEMP DEBUG: {debugLine}</div>
+      <div className="mb-2 text-[10px] text-brand-900/40 font-mono whitespace-pre-wrap break-all">TEMP DEBUG: {debugLine}</div>
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[10px] font-bold uppercase tracking-wider text-brand-800/70 border-b border-brand-100">
