@@ -12,6 +12,12 @@ export default async function SettingsHubPage() {
       desc: "Channel access token + Group ID สำหรับส่งประกาศเข้ากลุ่ม LINE",
       icon: "💬",
     },
+    {
+      href: "/admin/settings/app-version",
+      title: "App Version Management",
+      desc: "ควบคุมเวอร์ชัน Android ขั้นต่ำ/ล่าสุด และบังคับอัปเดต — มีผลทันทีไม่ต้อง build แอปใหม่",
+      icon: "📱",
+    },
   ];
 
   return (
