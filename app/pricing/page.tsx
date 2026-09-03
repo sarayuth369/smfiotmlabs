@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "../_components/SiteHeader";
 import { SiteFooter } from "../_components/SiteFooter";
@@ -5,6 +6,11 @@ import { PricingPlans } from "./_components/PricingPlans";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
 import { getSubscriptionPlans } from "@/lib/catalog";
+
+export const metadata: Metadata = {
+  title: "Pricing | SMF IoT",
+  description: "แพ็กเกจ Starter, Pro, Business และ Enterprise สำหรับระบบ Smart Farm IoT — เลือกแผนที่เหมาะกับฟาร์มของคุณ",
+};
 
 export default async function PricingPage() {
   const supabase = await createClient();

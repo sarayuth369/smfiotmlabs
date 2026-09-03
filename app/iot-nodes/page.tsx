@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "../_components/SiteHeader";
 import { SiteFooter } from "../_components/SiteFooter";
 import { HardwareGrid } from "./_components/HardwareGrid";
 import { createClient } from "@/lib/supabase/server";
 import { getProducts } from "@/lib/catalog";
+
+export const metadata: Metadata = {
+  title: "IoT Node Hardware | SMF IoT",
+  description: "อุปกรณ์ SMF IoT Node สำหรับ Smart Farm ตั้งแต่ระดับทดลองจนถึงระดับอุตสาหกรรม พร้อมบริการติดตั้งและดูแลระบบ",
+};
 
 const services = [
   {

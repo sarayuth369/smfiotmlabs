@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { SiteHeader } from "./_components/SiteHeader";
 import { SiteFooter } from "./_components/SiteFooter";
 
@@ -98,11 +97,6 @@ const I = {
   Line: ({ className = "w-5 h-5" }: IconProps) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M12 3C6.5 3 2 6.6 2 11c0 4 3.6 7.3 8.4 7.9.3.1.7.2.8.5 0 .3-.1.7-.2 1l-.2 1c-.1.3 0 .7.4.5.4-.2 4.8-2.8 6.5-4.8C19.4 15.4 22 13.4 22 11c0-4.4-4.5-8-10-8zm-4 10H6.5v-4.6h-.7v-.5h2v.5h-.7V13zm2.4 0h-.6v-5h.6v5zm3.5 0h-.5l-1.6-2.6V13h-.6V8h.6l1.5 2.4V8h.6v5zm3.8-4.5h-1.5v.9h1.4v.5h-1.4v.9h1.5v.5h-2v-3.3h2v.5z" />
-    </svg>
-  ),
-  Phone2: ({ className = "w-5 h-5" }: IconProps) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z" />
     </svg>
   ),
   Menu: ({ className = "w-6 h-6" }: IconProps) => (
@@ -304,7 +298,7 @@ export default function Home() {
                       href="#contact"
                       className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold shadow-lg shadow-brand-900/20 transition"
                     >
-                      <I.Phone2 className="w-4 h-4" /> ปรึกษาฟรี
+                      <I.Line className="w-4 h-4" /> ปรึกษาฟรี
                     </a>
                   </div>
                   <div className="mt-5">
