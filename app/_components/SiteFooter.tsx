@@ -64,7 +64,10 @@ export function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 text-xs text-brand-200/60 flex flex-wrap items-center justify-between gap-3">
           <div>© {new Date().getFullYear()} SMF IoT by M Labs. All rights reserved.</div>
-          <div>Made with 🌱 in Thailand</div>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
+            <span>Made with 🌱 in Thailand</span>
+          </div>
         </div>
       </div>
     </footer>
