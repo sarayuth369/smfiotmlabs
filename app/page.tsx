@@ -163,13 +163,13 @@ const appFeatures = [
   { icon: <I.Bell />, t: "แจ้งเตือนอัตโนมัติ" },
 ];
 
-// Section 7 — SMF Ecosystem (SMF AI is explicitly marked as future — not a current feature)
+// Section 7 — SMF Ecosystem
 const ecosystem = [
   { t: "SMF IoT Node", d: "อุปกรณ์เก็บข้อมูลและควบคุมภาคสนาม", future: false },
   { t: "SMF Cloud", d: "จัดเก็บและประมวลผลข้อมูลบนคลาวด์อย่างปลอดภัย", future: false },
   { t: "SMF App", d: "แอปพลิเคชันสำหรับติดตามและควบคุมฟาร์ม", future: false },
   { t: "SMF Analytics", d: "วิเคราะห์ข้อมูลเชิงลึกเพื่อสนับสนุนการตัดสินใจ", future: false },
-  { t: "SMF AI", d: "ระบบ AI ช่วยวิเคราะห์และแนะนำการเพาะปลูก", future: true },
+  { t: "SMF AI", d: "ระบบ AI ช่วยวิเคราะห์และแนะนำการเพาะปลูก", future: false },
 ];
 
 // Section 7 — Technology stack actually used by the system
