@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MobileMenu } from "./MobileMenu";
 
 const NAV = [
-  { href: "/#mission", label: "จุดประสงค์" },
+  { href: "/#why", label: "ทำไมต้อง SMF IoT" },
   { href: "/#how", label: "การทำงาน" },
   { href: "/#features", label: "จุดเด่น" },
   { href: "/#sensors", label: "เซนเซอร์" },

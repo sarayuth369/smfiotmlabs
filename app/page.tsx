@@ -64,11 +64,6 @@ const I = {
       <path d="M5 12l5 5L20 7" />
     </svg>
   ),
-  Coin: ({ className = "w-5 h-5" }: IconProps) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 10h4a2 2 0 1 1 0 4H9" />
-    </svg>
-  ),
   Thermo: ({ className = "w-5 h-5" }: IconProps) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M14 4a2 2 0 1 0-4 0v10.5a4 4 0 1 0 4 0V4z" />
@@ -79,14 +74,21 @@ const I = {
       <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
     </svg>
   ),
-  Pin: ({ className = "w-5 h-5" }: IconProps) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" />
-    </svg>
-  ),
   Book: ({ className = "w-5 h-5" }: IconProps) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M4 4h11a4 4 0 0 1 4 4v12H7a3 3 0 0 1-3-3V4z" /><path d="M4 17a3 3 0 0 1 3-3h12" />
+    </svg>
+  ),
+  Lock: ({ className = "w-5 h-5" }: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  ),
+  Database: ({ className = "w-5 h-5" }: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
     </svg>
   ),
   Facebook: ({ className = "w-5 h-5" }: IconProps) => (
@@ -99,90 +101,98 @@ const I = {
       <path d="M12 3C6.5 3 2 6.6 2 11c0 4 3.6 7.3 8.4 7.9.3.1.7.2.8.5 0 .3-.1.7-.2 1l-.2 1c-.1.3 0 .7.4.5.4-.2 4.8-2.8 6.5-4.8C19.4 15.4 22 13.4 22 11c0-4.4-4.5-8-10-8zm-4 10H6.5v-4.6h-.7v-.5h2v.5h-.7V13zm2.4 0h-.6v-5h.6v5zm3.5 0h-.5l-1.6-2.6V13h-.6V8h.6l1.5 2.4V8h.6v5zm3.8-4.5h-1.5v.9h1.4v.5h-1.4v.9h1.5v.5h-2v-3.3h2v.5z" />
     </svg>
   ),
-  Menu: ({ className = "w-6 h-6" }: IconProps) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M3 6h18M3 12h18M3 18h18" />
-    </svg>
-  ),
 };
 
 /* ---------- Data ---------- */
 
-const highlights = [
-  { icon: <I.Chart />, title: "Real-time Monitoring", desc: "ตรวจสอบข้อมูลฟาร์มแบบเรียลไทม์ทุกที่ทุกเวลา" },
-  { icon: <I.Cpu />, title: "Modular Design", desc: "ออกแบบเป็นโมดูล ต่อยอด ขยาย ปรับได้อิสระ" },
-  { icon: <I.Bolt />, title: "Smart Automation", desc: "สั่งงานอัตโนมัติตามเงื่อนไข ลดการทำงานคน" },
-  { icon: <I.Leaf />, title: "Expandable Platform", desc: "แพลตฟอร์มขยายได้ รองรับเซนเซอร์เพิ่มในอนาคต" },
-  { icon: <I.Phone />, title: "Mobile Control", desc: "ควบคุมทุกอุปกรณ์ผ่านมือถือได้ในแอปเดียว" },
-  { icon: <I.Coin />, title: "Low Cost", desc: "ต้นทุนต่ำ คุ้มค่า เหมาะกับเกษตรกรไทย" },
-  { icon: <I.Cloud />, title: "Cloud Connectivity", desc: "เก็บและวิเคราะห์ข้อมูลบน Cloud ปลอดภัย" },
-  { icon: <I.Wrench />, title: "Easy Installation", desc: "ติดตั้งง่าย พร้อมใช้งานทันที ไม่ต้องเชี่ยวชาญ" },
+// Section 2 — Why SMF IoT (4 key points)
+const whyPoints = [
+  { icon: <I.Leaf />, title: "Designed for Thai Agriculture", desc: "ออกแบบให้เข้าใจบริบทการเกษตรไทย ใช้งานง่าย ไม่ซับซ้อน" },
+  { icon: <I.Cpu />, title: "Start Small, Scale Easily", desc: "เริ่มจากอุปกรณ์พื้นฐาน แล้วต่อยอดเพิ่มเซนเซอร์และฟังก์ชันได้ตามต้องการ" },
+  { icon: <I.Cloud />, title: "One Connected Platform", desc: "เชื่อมต่ออุปกรณ์ แอป และข้อมูลไว้ในระบบเดียว จัดการง่าย ไม่กระจัดกระจาย" },
+  { icon: <I.Check />, title: "Built for Real Use", desc: "ผ่านการพัฒนาและทดสอบเพื่อใช้งานได้จริงในภาคสนาม ไม่ใช่แค่ต้นแบบ" },
 ];
 
-const missions = [
-  "เพื่อให้เกษตรกรไทยเข้าถึงเทคโนโลยี Smart Farm ได้ในราคาที่เหมาะสม",
-  "เพื่อเพิ่มผลผลิตและคุณภาพของพืชด้วยข้อมูลแบบ Real-time",
-  "เพื่อลดต้นทุนน้ำ ปุ๋ย และพลังงาน",
-  "เพื่อลดเวลาในการตรวจสอบและดูแลแปลงเกษตร",
-  "เพื่อสนับสนุนการตัดสินใจด้วยข้อมูล (Data-Driven Farming)",
-  "เพื่อยกระดับการเกษตรไทยสู่ยุค Agriculture 4.0",
-  "เพื่อพัฒนาระบบที่สามารถขยายและต่อยอดได้ในอนาคต",
+// Section 4 — Core Capabilities (merged Highlights + Benefits)
+const capabilities = [
+  { icon: <I.Chart />, title: "Real-time Monitoring", desc: "ตรวจสอบข้อมูลฟาร์มแบบเรียลไทม์ได้ทุกที่ทุกเวลา" },
+  { icon: <I.Phone />, title: "Mobile Control", desc: "ควบคุมอุปกรณ์ทั้งหมดผ่านแอปเดียวบนมือถือ" },
+  { icon: <I.Bolt />, title: "Smart Automation", desc: "ตั้งเงื่อนไขสั่งงานอัตโนมัติ ลดภาระงานประจำวัน" },
+  { icon: <I.Bell />, title: "Instant Alerts", desc: "แจ้งเตือนทันทีเมื่อค่าผิดปกติ ผ่านแอปและ LINE" },
+  { icon: <I.Book />, title: "Historical Data", desc: "บันทึกและย้อนดูข้อมูลย้อนหลังเพื่อวิเคราะห์แนวโน้ม" },
+  { icon: <I.Cpu />, title: "Expandable System", desc: "ออกแบบเป็นโมดูล เพิ่มเซนเซอร์และอุปกรณ์ได้ตามต้องการ" },
 ];
 
-const sensors = [
-  { icon: <I.Thermo />, label: "อุณหภูมิอากาศ", en: "Temperature" },
-  { icon: <I.Drop />, label: "ความชื้นอากาศ", en: "Humidity" },
-  { icon: <I.Leaf />, label: "ความชื้นดิน", en: "Soil Moisture" },
-  { icon: <I.Leaf />, label: "ค่า NPK ในดิน", en: "NPK" },
-  { icon: <I.Drop />, label: "ค่าความเป็นกรด-ด่าง", en: "pH" },
-  { icon: <I.Bolt />, label: "ค่าการนำไฟฟ้า", en: "EC" },
-  { icon: <I.Sun />, label: "แสงสว่าง", en: "Lux" },
-  { icon: <I.Cloud />, label: "ปริมาณน้ำฝน", en: "Rain" },
-  { icon: <I.Drop />, label: "ระดับน้ำ", en: "Water Level" },
-  { icon: <I.Bolt />, label: "พลังงานไฟฟ้า", en: "Voltage / Current" },
+// Section 5 — Supported sensors, grouped for readability
+const sensorGroups = [
+  {
+    group: "Environment",
+    items: [
+      { icon: <I.Thermo />, label: "อุณหภูมิอากาศ", en: "Temperature" },
+      { icon: <I.Drop />, label: "ความชื้นอากาศ", en: "Humidity" },
+      { icon: <I.Sun />, label: "แสงสว่าง", en: "Lux" },
+      { icon: <I.Cloud />, label: "ปริมาณน้ำฝน", en: "Rain" },
+    ],
+  },
+  {
+    group: "Soil",
+    items: [
+      { icon: <I.Leaf />, label: "ความชื้นดิน", en: "Soil Moisture" },
+      { icon: <I.Leaf />, label: "ค่า NPK ในดิน", en: "NPK" },
+      { icon: <I.Drop />, label: "ค่าความเป็นกรด-ด่าง", en: "pH" },
+    ],
+  },
+  {
+    group: "Water",
+    items: [
+      { icon: <I.Drop />, label: "ระดับน้ำ", en: "Water Level" },
+      { icon: <I.Bolt />, label: "ค่าการนำไฟฟ้า", en: "EC" },
+    ],
+  },
+  {
+    group: "Energy",
+    items: [{ icon: <I.Bolt />, label: "พลังงานไฟฟ้า", en: "Voltage / Current" }],
+  },
 ];
 
-const helpItems = [
-  { icon: <I.Phone />, title: "ตรวจสอบข้อมูลได้ทุกที่ ทุกเวลา" },
-  { icon: <I.Wifi />, title: "ควบคุมอุปกรณ์ผ่านมือถือ" },
-  { icon: <I.Line />, title: "แจ้งเตือนทันทีผ่าน LINE" },
-  { icon: <I.Drop />, title: "ลดการใช้น้ำอย่างมีประสิทธิภาพ" },
-  { icon: <I.Coin />, title: "ลดการใช้ปุ๋ยเกินความจำเป็น" },
-  { icon: <I.Book />, title: "บันทึกข้อมูลย้อนหลัง" },
-  { icon: <I.Wrench />, title: "ลดค่าใช้จ่ายด้านแรงงาน" },
-  { icon: <I.Chart />, title: "เพิ่มผลผลิตด้วยข้อมูลจริง" },
-  { icon: <I.Pin />, title: "รองรับหลายแปลงในระบบเดียว" },
-  { icon: <I.Wrench />, title: "ติดตั้งง่าย พร้อมใช้งาน" },
+// Section 6 — SMF App highlights
+const appFeatures = [
+  { icon: <I.Chart />, t: "แดชบอร์ดเรียลไทม์" },
+  { icon: <I.Book />, t: "กราฟย้อนหลัง" },
+  { icon: <I.Phone />, t: "ควบคุมอุปกรณ์" },
+  { icon: <I.Bell />, t: "แจ้งเตือนอัตโนมัติ" },
 ];
 
+// Section 7 — SMF Ecosystem (SMF AI is explicitly marked as future — not a current feature)
+const ecosystem = [
+  { t: "SMF IoT Node", d: "อุปกรณ์เก็บข้อมูลและควบคุมภาคสนาม", future: false },
+  { t: "SMF Cloud", d: "จัดเก็บและประมวลผลข้อมูลบนคลาวด์อย่างปลอดภัย", future: false },
+  { t: "SMF App", d: "แอปพลิเคชันสำหรับติดตามและควบคุมฟาร์ม", future: false },
+  { t: "SMF Analytics", d: "วิเคราะห์ข้อมูลเชิงลึกเพื่อสนับสนุนการตัดสินใจ", future: false },
+  { t: "SMF AI", d: "ระบบ AI ช่วยวิเคราะห์และแนะนำการเพาะปลูก", future: true },
+];
+
+// Section 7 — Technology stack actually used by the system
 const tech = [
   { name: "ESP32", icon: <I.Cpu /> },
-  { name: "WiFi", icon: <I.Wifi /> },
+  { name: "Wi-Fi", icon: <I.Wifi /> },
   { name: "MQTT", icon: <I.Bolt /> },
-  { name: "Cloud", icon: <I.Cloud /> },
-  { name: "Flutter App", icon: <I.Phone /> },
-  { name: "LINE Notify", icon: <I.Line /> },
-  { name: "Google Sheet / DB", icon: <I.Book /> },
+  { name: "Secure Cloud", icon: <I.Lock /> },
+  { name: "Supabase", icon: <I.Database /> },
+  { name: "Flutter", icon: <I.Phone /> },
+  { name: "LINE Integration", icon: <I.Line /> },
   { name: "OTA Update", icon: <I.Cloud /> },
-  { name: "Solar Power", icon: <I.Sun /> },
 ];
 
-const targets = [
-  "เกษตรกร / ชาวนา",
-  "สวนผลไม้",
-  "ฟาร์มผัก / โรงเรือน",
-  "ศูนย์เรียนรู้การเกษตร",
-  "หน่วยงานภาครัฐ / เอกชน",
-  "มหาวิทยาลัย / โรงเรียน",
-];
-
+// Section 8 — Use cases (merged Target + Use cases)
 const usecases = [
-  { emoji: "🌾", label: "นา / ข้าว" },
+  { emoji: "🌾", label: "นาและพืชไร่" },
   { emoji: "🌳", label: "สวนผลไม้" },
-  { emoji: "🥬", label: "ผักไฮโดรโปนิกส์" },
-  { emoji: "🏫", label: "โรงเรียน" },
-  { emoji: "🌸", label: "ไม้ดอกไม้ประดับ" },
+  { emoji: "🥬", label: "โรงเรือนและผัก" },
+  { emoji: "💧", label: "ระบบน้ำและปั๊ม" },
   { emoji: "🐄", label: "ฟาร์มสัตว์ / สัตว์น้ำ" },
+  { emoji: "🏫", label: "โรงเรียนและศูนย์เรียนรู้" },
+  { emoji: "🏢", label: "ธุรกิจและโครงการ Smart Agriculture" },
 ];
 
 /* ---------- Small building blocks ---------- */
@@ -231,7 +241,7 @@ export default function Home() {
       <SiteHeader />
 
       <main>
-        {/* ============ HERO ============ */}
+        {/* ============ 1. HERO ============ */}
         <section className="hero-bg relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 sm:pt-20 pb-16 sm:pb-24 grid lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-7">
@@ -263,7 +273,7 @@ export default function Home() {
               <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { icon: <I.Chart />, t: "เพิ่มผลผลิต", s: "ด้วยข้อมูลจริง" },
-                  { icon: <I.Coin />, t: "ลดต้นทุน", s: "น้ำ ปุ๋ย พลังงาน" },
+                  { icon: <I.Cpu />, t: "ลดต้นทุน", s: "น้ำ ปุ๋ย พลังงาน" },
                   { icon: <I.Phone />, t: "ควบคุมง่าย", s: "ผ่านมือถือ" },
                   { icon: <I.Bell />, t: "แจ้งเตือน", s: "ทันทีทุกกรณี" },
                 ].map((b) => (
@@ -317,35 +327,39 @@ export default function Home() {
           <div className="border-t border-brand-100 bg-white/70 backdrop-blur">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
               <Stat v="10+" l="เซนเซอร์ที่รองรับ" />
-              <Stat v="24/7" l="ตรวจสอบเรียลไทม์" />
-              <Stat v="≤ 30%" l="ลดต้นทุนน้ำ / ปุ๋ย" />
-              <Stat v="100%" l="พัฒนาโดยคนไทย" />
+              <Stat v="24/7" l="ตรวจสอบระบบ" />
+              <Stat v="Real-time" l="ข้อมูลและการแจ้งเตือน" />
+              <Stat v="100%" l="พัฒนาเพื่อเกษตรกรไทย" />
             </div>
           </div>
         </section>
 
-        {/* ============ MISSION ============ */}
-        <section id="mission" className="py-20 sm:py-24">
+        {/* ============ 2. WHY SMF IOT (incl. Mission) ============ */}
+        <section id="why" className="py-20 sm:py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Mission"
-              title="จุดประสงค์ของเรา"
-              desc="ยกระดับเกษตรกรไทยด้วยเทคโนโลยีที่เข้าถึงง่าย ใช้จริง และต่อยอดได้"
+              eyebrow="Why SMF IoT"
+              title="Why SMF IoT?"
+              desc="เทคโนโลยี Smart Farm ที่ออกแบบให้เริ่มต้นง่าย ใช้งานจริง และขยายไปพร้อมกับฟาร์มของคุณ"
             />
-            <div className="grid md:grid-cols-2 gap-4">
-              {missions.map((m) => (
-                <div key={m} className="card p-5 flex items-start gap-4">
-                  <div className="shrink-0 w-9 h-9 rounded-full bg-brand-500 text-white flex items-center justify-center">
-                    <I.Check />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {whyPoints.map((w) => (
+                <div key={w.title} className="card p-6">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-md shadow-brand-600/20">
+                    {w.icon}
                   </div>
-                  <p className="text-brand-900/85 leading-relaxed">{m}</p>
+                  <div className="mt-4 font-semibold text-brand-800">{w.title}</div>
+                  <p className="text-sm text-brand-900/65 mt-1">{w.desc}</p>
                 </div>
               ))}
             </div>
+            <p className="mt-10 text-center text-lg sm:text-xl font-semibold text-brand-700 italic max-w-2xl mx-auto">
+              “ทำให้เทคโนโลยี Smart Farm เข้าถึงง่าย ใช้งานได้จริง และเติบโตไปพร้อมกับฟาร์มของคุณ”
+            </p>
           </div>
         </section>
 
-        {/* ============ HOW IT WORKS ============ */}
+        {/* ============ 3. HOW IT WORKS ============ */}
         <section id="how" className="section-bg-alt py-20 sm:py-24 border-y border-brand-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeading
@@ -375,82 +389,67 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ============ FEATURES ============ */}
+        {/* ============ 4. CORE CAPABILITIES ============ */}
         <section id="features" className="py-20 sm:py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Highlights"
-              title="จุดเด่นของระบบ"
-              desc="ครบทุกฟีเจอร์ที่ฟาร์มยุคใหม่ต้องมี ในราคาที่จับต้องได้"
+              eyebrow="Core Capabilities"
+              title="ความสามารถหลักของระบบ"
+              desc="ฟีเจอร์สำคัญที่ช่วยให้บริหารฟาร์มได้ง่ายขึ้นในทุกวัน"
             />
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {highlights.map((h) => (
-                <div key={h.title} className="card p-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {capabilities.map((c) => (
+                <div key={c.title} className="card p-6">
                   <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-md shadow-brand-600/20">
-                    {h.icon}
+                    {c.icon}
                   </div>
-                  <div className="mt-4 font-semibold text-brand-800">{h.title}</div>
-                  <p className="text-sm text-brand-900/65 mt-1">{h.desc}</p>
+                  <div className="mt-4 font-semibold text-brand-800">{c.title}</div>
+                  <p className="text-sm text-brand-900/65 mt-1">{c.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ============ SENSORS ============ */}
+        {/* ============ 5. SUPPORTED SENSORS ============ */}
         <section id="sensors" className="section-bg-alt border-y border-brand-100 py-20 sm:py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-10">
             <div className="lg:col-span-5">
               <SectionHeading
                 eyebrow="Sensors"
                 title="เซนเซอร์ที่รองรับ"
-                desc="รองรับเซนเซอร์หลากหลาย ครอบคลุมทุกมิติของฟาร์มอัจฉริยะ และเพิ่มเติมได้ในอนาคต"
+                desc="รองรับเซนเซอร์หลากหลาย ครอบคลุมทุกมิติของฟาร์มอัจฉริยะ จัดกลุ่มตามการใช้งาน"
                 center={false}
               />
               <div className="chip">
-                <I.Bolt className="w-4 h-4" /> รองรับเซนเซอร์เพิ่มเติมในอนาคต
+                <I.Bolt className="w-4 h-4" /> รองรับการขยายระบบเพิ่มเซนเซอร์ในอนาคต
               </div>
             </div>
-            <div className="lg:col-span-7">
-              <div className="grid sm:grid-cols-2 gap-3">
-                {sensors.map((s) => (
-                  <div key={s.en} className="card p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
-                      {s.icon}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-brand-800 text-sm">{s.label}</div>
-                      <div className="text-xs text-brand-900/55">{s.en}</div>
-                    </div>
+            <div className="lg:col-span-7 space-y-6">
+              {sensorGroups.map((g) => (
+                <div key={g.group}>
+                  <div className="text-xs font-bold uppercase tracking-wide text-brand-700/70 mb-2">{g.group}</div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {g.items.map((s) => (
+                      <div key={s.en} className="card p-4 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+                          {s.icon}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-brand-800 text-sm">{s.label}</div>
+                          <div className="text-xs text-brand-900/55">{s.en}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ============ WHAT WE HELP WITH ============ */}
-        <section className="py-20 sm:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <SectionHeading
-              eyebrow="Benefits"
-              title="เทคโนโลยีของเราช่วยคุณได้อย่างไร"
-            />
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {helpItems.map((h) => (
-                <div key={h.title} className="card p-5 text-center">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center">
-                    {h.icon}
-                  </div>
-                  <div className="mt-3 text-sm font-medium text-brand-800">{h.title}</div>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ============ APP ============ */}
-        <section id="app" className="section-bg-alt border-y border-brand-100 py-20 sm:py-24">
+        {/* ============ 6. SMF APP ============ */}
+        <section id="app" className="py-20 sm:py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <SectionHeading
@@ -460,12 +459,7 @@ export default function Home() {
                 center={false}
               />
               <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { icon: <I.Chart />, t: "กราฟข้อมูล" },
-                  { icon: <I.Phone />, t: "ควบคุมอุปกรณ์" },
-                  { icon: <I.Bell />, t: "แจ้งเตือนอัตโนมัติ" },
-                  { icon: <I.Book />, t: "ประวัติข้อมูล" },
-                ].map((f) => (
+                {appFeatures.map((f) => (
                   <div key={f.t} className="card p-4 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-brand-600 text-white flex items-center justify-center">
                       {f.icon}
@@ -522,44 +516,26 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ============ TECH STACK ============ */}
-        <section className="py-20 sm:py-24">
+        {/* ============ 7. SMF ECOSYSTEM / TECHNOLOGY ============ */}
+        <section id="ecosystem" className="section-bg-alt border-y border-brand-100 py-20 sm:py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Stack"
-              title="เทคโนโลยีที่เราใช้"
-              desc="เลือกใช้เทคโนโลยีที่พิสูจน์แล้ว มั่นคง ปลอดภัย และต่อยอดได้"
+              eyebrow="Ecosystem & Technology"
+              title="แพลตฟอร์มและเทคโนโลยีเบื้องหลัง SMF IoT"
+              desc="ระบบนิเวศครบวงจร สร้างบนเทคโนโลยีที่พิสูจน์แล้ว มั่นคง ปลอดภัย และต่อยอดได้"
             />
-            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-4">
-              {tech.map((t) => (
-                <div key={t.name} className="card p-4 flex flex-col items-center gap-2 text-center">
-                  <div className="w-11 h-11 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center">
-                    {t.icon}
-                  </div>
-                  <div className="text-xs font-semibold text-brand-800">{t.name}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
-        {/* ============ SMF PLATFORM ============ */}
-        <section className="section-bg-alt border-y border-brand-100 py-20 sm:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <SectionHeading
-              eyebrow="SMF Platform"
-              title="แพลตฟอร์มเกษตรอัจฉริยะครบวงจร"
-              desc="ตั้งแต่การเก็บข้อมูล จัดการบนคลาวด์ วิเคราะห์เชิงลึก จนถึง AI แนะนำการเพาะปลูกในอนาคต"
-            />
             <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
-              {[
-                { t: "SMF IoT Node", d: "อุปกรณ์เก็บข้อมูลและควบคุม" },
-                { t: "SMF App", d: "แอปพลิเคชันสำหรับเกษตรกร" },
-                { t: "SMF Cloud", d: "จัดเก็บข้อมูลบนคลาวด์" },
-                { t: "SMF Analytics", d: "วิเคราะห์ข้อมูลเชิงลึก" },
-                { t: "SMF AI (Future)", d: "AI วิเคราะห์และแนะนำการเพาะปลูก" },
-              ].map((p) => (
-                <div key={p.t} className="card p-6 flex flex-col">
+              {ecosystem.map((p) => (
+                <div
+                  key={p.t}
+                  className={`card p-6 flex flex-col relative ${p.future ? "opacity-80" : ""}`}
+                >
+                  {p.future && (
+                    <span className="absolute top-3 right-3 chip bg-amber-50 text-amber-700 border-amber-200 text-[11px]">
+                      Coming in Future
+                    </span>
+                  )}
                   <div className="w-10 h-10 rounded-lg bg-brand-600 text-white flex items-center justify-center">
                     <I.Leaf />
                   </div>
@@ -568,32 +544,18 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </div>
-        </section>
 
-        {/* ============ TARGETS & USECASES ============ */}
-        <section className="py-20 sm:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-12">
-            <div>
-              <SectionHeading eyebrow="Target" title="กลุ่มเป้าหมาย" center={false} />
-              <ul className="grid sm:grid-cols-2 gap-3">
-                {targets.map((t) => (
-                  <li key={t} className="card p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center">
-                      <I.Check />
+            <div className="mt-14">
+              <div className="text-xs font-bold uppercase tracking-wide text-brand-700/70 mb-4 text-center">
+                เทคโนโลยีที่ใช้งาน
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+                {tech.map((t) => (
+                  <div key={t.name} className="card p-4 flex flex-col items-center gap-2 text-center">
+                    <div className="w-11 h-11 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center">
+                      {t.icon}
                     </div>
-                    <span className="text-brand-900/85 font-medium text-sm">{t}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <SectionHeading eyebrow="Use cases" title="การใช้งาน" center={false} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {usecases.map((u) => (
-                  <div key={u.label} className="card p-5 text-center">
-                    <div className="text-4xl">{u.emoji}</div>
-                    <div className="mt-2 text-sm font-semibold text-brand-800">{u.label}</div>
+                    <div className="text-xs font-semibold text-brand-800">{t.name}</div>
                   </div>
                 ))}
               </div>
@@ -601,7 +563,26 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ============ CTA ============ */}
+        {/* ============ 8. USE CASES ============ */}
+        <section className="py-20 sm:py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="Use Cases"
+              title="เหมาะกับใคร"
+              desc="ระบบ SMF IoT ออกแบบให้ปรับใช้ได้หลากหลายพื้นที่และรูปแบบการเกษตร"
+            />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {usecases.map((u) => (
+                <div key={u.label} className="card p-5 text-center">
+                  <div className="text-4xl">{u.emoji}</div>
+                  <div className="mt-2 text-sm font-semibold text-brand-800">{u.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ============ 9. FINAL CTA ============ */}
         <section id="contact" className="pb-20 sm:pb-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 text-white p-10 sm:p-14">
@@ -613,10 +594,10 @@ export default function Home() {
                     <I.Leaf className="w-4 h-4" /> พร้อมเริ่มต้นแล้วหรือยัง?
                   </span>
                   <h3 className="mt-4 text-3xl sm:text-4xl font-bold leading-tight">
-                    ปรึกษาฟรี — เราออกแบบระบบให้ตรงกับฟาร์มของคุณ
+                    เริ่มต้น Smart Farm ในแบบของคุณ
                   </h3>
                   <p className="mt-3 text-white/85 max-w-lg">
-                    ทีม M Labs พร้อมช่วยประเมินความต้องการ วางระบบ ติดตั้ง และสอนใช้งานตั้งแต่ต้นจนจบ
+                    ให้ทีม SMF IoT ช่วยประเมินและออกแบบระบบให้เหมาะกับฟาร์มของคุณ
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 lg:justify-end">

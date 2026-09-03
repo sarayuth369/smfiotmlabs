@@ -36,7 +36,7 @@ export function SiteFooter() {
         <div>
           <div className="text-white font-semibold mb-3">เมนู</div>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/#mission" className="hover:text-white">จุดประสงค์</Link></li>
+            <li><Link href="/#why" className="hover:text-white">ทำไมต้อง SMF IoT</Link></li>
             <li><Link href="/#how" className="hover:text-white">การทำงาน</Link></li>
             <li><Link href="/#features" className="hover:text-white">จุดเด่น</Link></li>
             <li><Link href="/#app" className="hover:text-white">SMF App</Link></li>
