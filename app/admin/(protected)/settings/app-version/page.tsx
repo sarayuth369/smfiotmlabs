@@ -1,5 +1,6 @@
 import { requireModule } from "@/lib/admin/current";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatThaiDateTime } from "@/lib/payment";
 import { updateAppVersionPolicy } from "./actions";
 
 type AppVersionPolicyRow = {
@@ -45,7 +46,7 @@ export default async function AppVersionPage() {
         <span className="font-semibold">
           {policy ? (policy.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน") : "ยังไม่ตั้งค่า"}
         </span>
-        {policy && <> — อัปเดตล่าสุด {new Date(policy.updated_at).toLocaleString("th-TH")}</>}
+        {policy && <> — อัปเดตล่าสุด {formatThaiDateTime(policy.updated_at)} น.</>}
       </div>
 
       <form action={updateAppVersionPolicy} className="card p-6 space-y-5">
