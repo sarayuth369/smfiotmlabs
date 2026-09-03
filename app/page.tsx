@@ -292,7 +292,7 @@ export default function Home() {
                       priority
                     />
                     <div className="absolute top-3 left-3 chip bg-white/90 backdrop-blur border-white shadow">
-                      <span className="w-2 h-2 rounded-full bg-brand-500 pulse-ring" /> Live
+                      <span className="w-2 h-2 rounded-full bg-brand-500 pulse-ring" /> Online
                     </div>
                     <a
                       href="#contact"
