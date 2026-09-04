@@ -7,9 +7,9 @@ export const metadata: Metadata = {
   description: "Privacy Policy and data handling practices for SMF IoT.",
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-10">
+    <section id={id} className="mt-10 scroll-mt-24">
       <h2 className="text-xl sm:text-2xl font-bold text-brand-800">{title}</h2>
       <div className="mt-3 space-y-3 text-brand-900/80 leading-relaxed">{children}</div>
     </section>
@@ -102,12 +102,37 @@ export default function PrivacyPage() {
               </p>
             </Section>
 
-            <Section title="6. สิทธิของคุณ (Your Rights)">
+            <Section title="6. สิทธิของคุณ และการขอลบบัญชี/ข้อมูล (Your Rights &amp; Account/Data Deletion)" id="data-deletion">
               <ul className="list-disc pl-5 space-y-2">
                 <li>เข้าถึงและแก้ไขข้อมูลบัญชีของคุณได้ที่หน้า Dashboard &gt; Account</li>
-                <li>ลบอุปกรณ์หรือฟาร์มของคุณออกจากระบบได้ด้วยตนเองผ่านแดชบอร์ด</li>
-                <li>ขอลบบัญชีและข้อมูลที่เกี่ยวข้องได้โดยติดต่อทีมงาน</li>
+                <li>ลบอุปกรณ์หรือฟาร์มของคุณออกจากระบบได้ด้วยตนเองผ่านแดชบอร์ด โดยไม่ต้องลบทั้งบัญชี</li>
                 <li>ยกเลิกการรับแจ้งเตือน (มือถือ/LINE) ได้ตลอดเวลาผ่านการตั้งค่าในแอปหรือแดชบอร์ด</li>
+              </ul>
+
+              <p className="mt-4 font-semibold text-brand-800">
+                วิธีขอลบบัญชีและข้อมูลทั้งหมด (How to request account &amp; data deletion)
+              </p>
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>
+                  ติดต่อทีมงาน SMF IoT by M Labs ผ่าน Facebook (
+                  <a href="https://facebook.com/" className="text-brand-700 underline">smfiotbymlabs</a>) หรือ LINE (
+                  <a href="https://line.me/" className="text-brand-700 underline">@smfiotmlabs</a>) — แจ้งอีเมลที่ใช้สมัครสมาชิก
+                  และระบุว่าต้องการ &ldquo;ขอลบบัญชีและข้อมูลทั้งหมด&rdquo;
+                </li>
+                <li>ทีมงานยืนยันตัวตนผู้ขอ (ตรวจสอบว่าเป็นเจ้าของบัญชีจริง) แล้วดำเนินการลบภายใน 30 วัน</li>
+                <li>ระบบจะส่งอีเมลยืนยันเมื่อดำเนินการลบเสร็จสิ้น</li>
+              </ol>
+
+              <p className="mt-4 font-semibold text-brand-800">ข้อมูลที่ถูกลบ และข้อมูลที่ต้องเก็บไว้ต่อ</p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>ลบทั้งหมด:</strong> ข้อมูลบัญชี (ชื่อ อีเมล รหัสผ่าน) ฟาร์ม โซน อุปกรณ์ เซนเซอร์
+                  และประวัติค่าที่วัดได้ การแจ้งเตือน push token และการเชื่อมต่อ LINE
+                </li>
+                <li>
+                  <strong>เก็บไว้ตามข้อผูกพันทางกฎหมาย:</strong> ประวัติการสั่งซื้อ/ใบเสร็จที่เกี่ยวข้องกับการชำระเงิน
+                  อาจถูกเก็บไว้ต่อตามระยะเวลาที่กฎหมายบัญชี/ภาษีกำหนด ก่อนถูกลบหรือทำให้ไม่สามารถระบุตัวตนได้
+                </li>
               </ul>
             </Section>
 
