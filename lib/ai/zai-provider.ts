@@ -65,11 +65,20 @@ function extractResponseText(result: unknown): string | null {
   return null;
 }
 
-/** Some chat models wrap JSON in ```json ... ``` fences despite instructions not to. */
+/**
+ * Some chat models wrap JSON in ```json ... ``` fences, or add chatty
+ * preamble before it, despite instructions not to. Pull the JSON out from
+ * wherever it sits: a fenced block anywhere in the text, else the
+ * outermost {...} span.
+ */
 function stripCodeFence(text: string): string {
   const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenced ? fenced[1] : trimmed;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) return fenced[1].trim();
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first !== -1 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
 }
 
 async function callZaiOnce(

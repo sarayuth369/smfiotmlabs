@@ -75,10 +75,23 @@ function extractZaiResponseText(result: unknown): string | null {
   return null;
 }
 
-function stripZaiCodeFence(text: string): string {
+/**
+ * GLM has no server-side schema enforcement (unlike Groq/OpenAI's
+ * response_format:json_schema above), so despite the "ONLY a JSON object"
+ * instruction it sometimes chats first ("แน่นอนค่ะ นี่คือคำตอบ:") before
+ * the JSON — more often here than on Farm AI Analysis's plainer prompt,
+ * since this file's system prompt is deliberately personality-heavy
+ * (สุภาพ, เป็นกันเอง tone). Pull the JSON out from wherever it sits:
+ * a fenced block anywhere in the text, else the outermost {...} span.
+ */
+function extractZaiJsonText(text: string): string {
   const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenced ? fenced[1] : trimmed;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) return fenced[1].trim();
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first !== -1 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
 }
 
 async function callZaiCompletions(
@@ -134,6 +147,14 @@ async function callZaiCompletions(
   return { ok: true, text };
 }
 
+function tryParseZaiJson(text: string): { ok: true; parsed: unknown } | { ok: false } {
+  try {
+    return { ok: true, parsed: JSON.parse(extractZaiJsonText(text)) };
+  } catch {
+    return { ok: false };
+  }
+}
+
 async function callZaiJsonWithRetry(
   model: string,
   messages: ChatMsg[],
@@ -146,11 +167,21 @@ async function callZaiJsonWithRetry(
   }
   if (!result.ok) return { ok: false, error: result.error };
 
-  try {
-    return { ok: true, parsed: JSON.parse(stripZaiCodeFence(result.text)) };
-  } catch {
-    return { ok: false, error: "invalid JSON from provider" };
+  let parsed = tryParseZaiJson(result.text);
+  if (!parsed.ok) {
+    // Fetch succeeded but the reply wasn't clean JSON (chatty preamble,
+    // truncation, etc.) - worth exactly one more try, same idiom as the
+    // fetch-level retry above and as lib/ai/zai-provider.ts's retry.
+    console.warn("[support.ai] zai invalid JSON, retrying once:", result.text.slice(0, 300));
+    const retry = await callZaiCompletions(model, messages, schemaHint, maxTokens);
+    if (!retry.ok) return { ok: false, error: retry.error };
+    parsed = tryParseZaiJson(retry.text);
+    if (!parsed.ok) {
+      console.warn("[support.ai] zai invalid JSON after retry:", retry.text.slice(0, 300));
+      return { ok: false, error: "invalid JSON from provider" };
+    }
   }
+  return parsed;
 }
 
 async function callChatCompletions(
