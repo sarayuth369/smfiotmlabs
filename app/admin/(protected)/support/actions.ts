@@ -9,13 +9,14 @@ export async function updateSupportAiConfig(formData: FormData): Promise<void> {
   const session = await requireModule("support_chat");
 
   const rawProvider = formData.get("provider");
-  const provider: SupportProviderId = rawProvider === "openai" ? "openai" : "groq";
+  const provider: SupportProviderId = rawProvider === "openai" ? "openai" : rawProvider === "zai" ? "zai" : "groq";
 
   const config: SupportAiConfig = {
     enabled: formData.get("enabled") === "on",
     provider,
     groq_model: String(formData.get("groq_model") ?? "").trim() || "openai/gpt-oss-120b",
     openai_model: String(formData.get("openai_model") ?? "").trim() || "gpt-4o-mini",
+    zai_model: String(formData.get("zai_model") ?? "").trim() || "@cf/zai-org/glm-4.7-flash",
     assistant_name: String(formData.get("assistant_name") ?? "").trim() || "น้องเอส",
     welcome_message: String(formData.get("welcome_message") ?? "").trim() || "สวัสดีค่ะ 😊 มีอะไรให้ SMF IoT Support ช่วยไหมคะ?",
     tone: String(formData.get("tone") ?? "").trim() || "สุภาพ เป็นกันเอง กระชับ",

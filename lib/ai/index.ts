@@ -12,6 +12,7 @@ import { getAiConfig, hasProviderKey, type AiProviderId } from "@/lib/admin/ai-s
 import { GeminiProvider } from "./gemini-provider";
 import { OpenAiProvider } from "./openai-provider";
 import { GroqProvider } from "./groq-provider";
+import { ZaiProvider } from "./zai-provider";
 import { AiProviderError, type AiProvider, type AiAnalysisResult, type AiChatResult, type AiChatTurn } from "./types";
 
 export { AiProviderError };
@@ -33,6 +34,13 @@ async function resolveActiveProvider(): Promise<{ provider: AiProvider; provider
       throw new AiProviderError("AI provider is currently unavailable", "unavailable");
     }
     return { provider: new GroqProvider(cfg.groq_model), providerId: "groq", model: cfg.groq_model };
+  }
+
+  if (id === "zai") {
+    if (!cfg.zai_enabled || !hasProviderKey("zai")) {
+      throw new AiProviderError("AI provider is currently unavailable", "unavailable");
+    }
+    return { provider: new ZaiProvider(cfg.zai_model), providerId: "zai", model: cfg.zai_model };
   }
 
   if (!cfg.openai_enabled || !hasProviderKey("openai")) {

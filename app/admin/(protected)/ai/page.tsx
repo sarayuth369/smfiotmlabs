@@ -64,6 +64,7 @@ export default async function AdminAiPage() {
             <option value="gemini">Gemini</option>
             <option value="openai">OpenAI</option>
             <option value="groq">Groq</option>
+            <option value="zai">ZAI</option>
           </select>
           <p className="mt-1 text-xs text-brand-900/50">
             ระบบใช้ provider นี้เท่านั้น — ไม่ fallback อัตโนมัติไป provider อื่น เพื่อป้องกันค่าใช้จ่ายพุ่งโดยไม่ตั้งใจ
@@ -108,6 +109,9 @@ export default async function AdminAiPage() {
             <div className="text-xs text-brand-900/50">
               API Key: {p.configured ? <span className="text-green-700 font-semibold">Configured ✓</span> : <span className="text-red-600">ไม่พบ — ตั้งค่าใน environment variable</span>}
             </div>
+            {p.id === "zai" && (
+              <p className="text-xs text-brand-900/50">ZAI — GLM-4.7 Flash via Cloudflare Worker AI</p>
+            )}
           </div>
         ))}
 

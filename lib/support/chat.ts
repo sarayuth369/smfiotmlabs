@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getUserPlan, formatPlanLabel } from "@/lib/plan-limits";
 import { getSupportAiConfig, getSupportLineSettings, isSupportLineReady, type SupportAiConfig } from "./settings";
 import { listPublishedSummaries, getKnowledgeByIds, findRelevantKnowledgeByKeyword, type KnowledgeEntry } from "./knowledge";
-import { callGroqSupport, callOpenAiSupport, selectRelevantGroq, selectRelevantOpenAi } from "./provider";
+import { callGroqSupport, callOpenAiSupport, callZaiSupport, selectRelevantGroq, selectRelevantOpenAi, selectRelevantZai } from "./provider";
 import { pushLineText, broadcastLineText } from "@/lib/line";
 
 const HISTORY_WINDOW_MESSAGES = 10; // last 5 exchanges — bounds tokens per turn
@@ -82,8 +82,8 @@ async function findRelevantKnowledge(cfg: SupportAiConfig, message: string): Pro
   const summaries = await listPublishedSummaries();
   if (summaries.length === 0) return [];
 
-  const select = cfg.provider === "groq" ? selectRelevantGroq : selectRelevantOpenAi;
-  const model = cfg.provider === "groq" ? cfg.groq_model : cfg.openai_model;
+  const select = cfg.provider === "groq" ? selectRelevantGroq : cfg.provider === "zai" ? selectRelevantZai : selectRelevantOpenAi;
+  const model = cfg.provider === "groq" ? cfg.groq_model : cfg.provider === "zai" ? cfg.zai_model : cfg.openai_model;
   const result = await select(model, message, summaries);
 
   if (result.ok) return getKnowledgeByIds(result.ids);
@@ -180,7 +180,9 @@ export async function sendSupportMessage(
   const result =
     cfg.provider === "groq"
       ? await callGroqSupport(cfg.groq_model, messages, maxTokens)
-      : await callOpenAiSupport(cfg.openai_model, messages, maxTokens);
+      : cfg.provider === "zai"
+        ? await callZaiSupport(cfg.zai_model, messages, maxTokens)
+        : await callOpenAiSupport(cfg.openai_model, messages, maxTokens);
 
   if (!result.ok) {
     console.warn("[support.chat] provider failed", cfg.provider, result.error);

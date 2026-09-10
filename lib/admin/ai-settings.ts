@@ -8,7 +8,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type AiProviderId = "gemini" | "openai" | "groq";
+export type AiProviderId = "gemini" | "openai" | "groq" | "zai";
 
 export type AiConfig = {
   default_provider: AiProviderId;
@@ -18,6 +18,8 @@ export type AiConfig = {
   openai_model: string;
   groq_enabled: boolean;
   groq_model: string;
+  zai_enabled: boolean;
+  zai_model: string;
 };
 
 // Seed defaults only — once the admin saves a config row in system_settings,
@@ -40,9 +42,14 @@ const DEFAULT_AI_CONFIG: AiConfig = {
   // strong enough for structured sensor analysis + farm chat. Admin can
   // change this in Admin > AI Analysis without any code change.
   groq_model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+  zai_enabled: false,
+  // GLM-4.7 Flash via Cloudflare Workers AI — off by default like OpenAI/Groq
+  // until an admin enables it (and CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN
+  // are set in env; see hasProviderKey below).
+  zai_model: process.env.ZAI_MODEL || "@cf/zai-org/glm-4.7-flash",
 };
 
-const PROVIDER_IDS: AiProviderId[] = ["gemini", "openai", "groq"];
+const PROVIDER_IDS: AiProviderId[] = ["gemini", "openai", "groq", "zai"];
 
 export async function getAiConfig(): Promise<AiConfig> {
   const admin = createAdminClient();
@@ -56,6 +63,8 @@ export async function getAiConfig(): Promise<AiConfig> {
     openai_model: v.openai_model || DEFAULT_AI_CONFIG.openai_model,
     groq_enabled: v.groq_enabled ?? DEFAULT_AI_CONFIG.groq_enabled,
     groq_model: v.groq_model || DEFAULT_AI_CONFIG.groq_model,
+    zai_enabled: v.zai_enabled ?? DEFAULT_AI_CONFIG.zai_enabled,
+    zai_model: v.zai_model || DEFAULT_AI_CONFIG.zai_model,
   };
 }
 
@@ -71,6 +80,7 @@ export async function saveAiConfig(next: AiConfig, updatedBy?: string) {
 export function hasProviderKey(provider: AiProviderId): boolean {
   if (provider === "gemini") return !!process.env.GEMINI_API_KEY;
   if (provider === "groq") return !!process.env.GROQ_API_KEY;
+  if (provider === "zai") return !!process.env.CLOUDFLARE_ACCOUNT_ID && !!process.env.CLOUDFLARE_API_TOKEN;
   return !!process.env.OPENAI_API_KEY;
 }
 
@@ -99,6 +109,13 @@ export async function getProviderStatuses(config?: AiConfig): Promise<ProviderSt
       configured: hasProviderKey("groq"),
       active: cfg.default_provider === "groq" && cfg.groq_enabled && hasProviderKey("groq"),
       model: cfg.groq_model,
+    },
+    {
+      id: "zai",
+      enabled: cfg.zai_enabled,
+      configured: hasProviderKey("zai"),
+      active: cfg.default_provider === "zai" && cfg.zai_enabled && hasProviderKey("zai"),
+      model: cfg.zai_model,
     },
   ];
 }

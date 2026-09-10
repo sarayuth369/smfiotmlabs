@@ -8,7 +8,8 @@ export async function updateAiConfig(formData: FormData): Promise<void> {
   const session = await requireModule("ai");
 
   const rawProvider = formData.get("default_provider");
-  const default_provider: AiProviderId = rawProvider === "openai" ? "openai" : rawProvider === "groq" ? "groq" : "gemini";
+  const default_provider: AiProviderId =
+    rawProvider === "openai" ? "openai" : rawProvider === "groq" ? "groq" : rawProvider === "zai" ? "zai" : "gemini";
   const config: AiConfig = {
     default_provider,
     gemini_enabled: formData.get("gemini_enabled") === "on",
@@ -17,6 +18,8 @@ export async function updateAiConfig(formData: FormData): Promise<void> {
     openai_model: String(formData.get("openai_model") ?? "").trim() || "gpt-4o-mini",
     groq_enabled: formData.get("groq_enabled") === "on",
     groq_model: String(formData.get("groq_model") ?? "").trim() || "openai/gpt-oss-120b",
+    zai_enabled: formData.get("zai_enabled") === "on",
+    zai_model: String(formData.get("zai_model") ?? "").trim() || "@cf/zai-org/glm-4.7-flash",
   };
 
   const { error } = await saveAiConfig(config, session.id);

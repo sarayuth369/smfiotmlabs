@@ -10,13 +10,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LineSettings } from "@/lib/admin/settings";
 
-export type SupportProviderId = "groq" | "openai";
+export type SupportProviderId = "groq" | "openai" | "zai";
 
 export type SupportAiConfig = {
   enabled: boolean;
   provider: SupportProviderId;
   groq_model: string;
   openai_model: string;
+  zai_model: string;
   assistant_name: string;
   welcome_message: string;
   tone: string;
@@ -29,6 +30,7 @@ const DEFAULT_SUPPORT_AI: SupportAiConfig = {
   provider: "groq",
   groq_model: process.env.SUPPORT_GROQ_MODEL || "openai/gpt-oss-120b",
   openai_model: process.env.SUPPORT_OPENAI_MODEL || "gpt-4o-mini",
+  zai_model: process.env.SUPPORT_ZAI_MODEL || "@cf/zai-org/glm-4.7-flash",
   assistant_name: "น้องเอส",
   welcome_message: "สวัสดีค่ะ 😊 มีอะไรให้ SMF IoT Support ช่วยไหมคะ?",
   tone: "สุภาพ เป็นกันเอง กระชับ ไม่พูดยาวเกินจำเป็น เหมาะกับลูกค้าเกษตรกร",
@@ -36,7 +38,7 @@ const DEFAULT_SUPPORT_AI: SupportAiConfig = {
   escalation_after_turns: 4,
 };
 
-const SUPPORT_PROVIDER_IDS: SupportProviderId[] = ["groq", "openai"];
+const SUPPORT_PROVIDER_IDS: SupportProviderId[] = ["groq", "openai", "zai"];
 
 export async function getSupportAiConfig(): Promise<SupportAiConfig> {
   const admin = createAdminClient();
@@ -47,6 +49,7 @@ export async function getSupportAiConfig(): Promise<SupportAiConfig> {
     provider: SUPPORT_PROVIDER_IDS.includes(v.provider as SupportProviderId) ? (v.provider as SupportProviderId) : DEFAULT_SUPPORT_AI.provider,
     groq_model: v.groq_model || DEFAULT_SUPPORT_AI.groq_model,
     openai_model: v.openai_model || DEFAULT_SUPPORT_AI.openai_model,
+    zai_model: v.zai_model || DEFAULT_SUPPORT_AI.zai_model,
     assistant_name: v.assistant_name || DEFAULT_SUPPORT_AI.assistant_name,
     welcome_message: v.welcome_message || DEFAULT_SUPPORT_AI.welcome_message,
     tone: v.tone || DEFAULT_SUPPORT_AI.tone,
@@ -66,6 +69,7 @@ export async function saveSupportAiConfig(next: SupportAiConfig, updatedBy?: str
 /** Whether the active support provider has its API key present in env — never returns the key itself. */
 export function hasSupportProviderKey(provider: SupportProviderId): boolean {
   if (provider === "groq") return !!process.env.GROQ_API_KEY;
+  if (provider === "zai") return !!process.env.CLOUDFLARE_ACCOUNT_ID && !!process.env.CLOUDFLARE_API_TOKEN;
   return !!process.env.OPENAI_API_KEY;
 }
 

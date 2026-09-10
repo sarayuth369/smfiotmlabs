@@ -83,10 +83,12 @@ export default async function AdminSupportPage() {
           <select name="provider" defaultValue={cfg.provider} className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm">
             <option value="groq">Groq (แนะนำ — เร็ว ประหยัด)</option>
             <option value="openai">OpenAI</option>
+            <option value="zai">ZAI</option>
           </select>
           <p className="mt-1 text-xs text-brand-900/50">
             สถานะ API key: {configured ? <span className="text-green-700 font-semibold">Configured ✓</span> : <span className="text-red-600">ไม่พบ — ตั้งค่าใน environment variable</span>}
           </p>
+          {cfg.provider === "zai" && <p className="mt-1 text-xs text-brand-900/50">ZAI — GLM-4.7 Flash via Cloudflare Worker AI</p>}
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
@@ -97,6 +99,10 @@ export default async function AdminSupportPage() {
           <div>
             <label className="text-xs font-semibold text-brand-900/70">OpenAI Model</label>
             <input name="openai_model" defaultValue={cfg.openai_model} className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-brand-900/70">ZAI Model</label>
+            <input name="zai_model" defaultValue={cfg.zai_model} className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono" />
           </div>
         </div>
 

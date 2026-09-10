@@ -13,6 +13,9 @@
 const TIMEOUT_MS = 30_000;
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+function zaiEndpoint(accountId: string, model: string): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+}
 
 export type SupportChatResult =
   | { ok: true; reply: string; suggestEscalation: boolean; escalationReason: string }
@@ -46,6 +49,109 @@ const RELEVANCE_JSON_SCHEMA = {
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 type JsonSchema = { name: string; schema: Record<string, unknown>; strict: boolean };
+
+// GLM-4.7 Flash (Cloudflare Workers AI) doesn't support response_format:
+// json_schema like Groq/OpenAI do, so the shape is spelled out as text in
+// the system prompt instead, and the reply is parsed manually. See
+// lib/ai/zai-provider.ts for the same pattern used by Farm AI Analysis —
+// duplicated here on purpose (this file intentionally never imports from
+// lib/ai/*, see file doc comment above).
+const SUPPORT_SCHEMA_HINT =
+  '\nRespond with ONLY a JSON object, no markdown code fences, matching exactly: ' +
+  '{"reply":string,"suggest_escalation":boolean,"escalation_reason":string}';
+const RELEVANCE_SCHEMA_HINT =
+  '\nRespond with ONLY a JSON object, no markdown code fences, matching exactly: {"relevant_ids":string[]}';
+
+function extractZaiResponseText(result: unknown): string | null {
+  if (typeof result !== "object" || result === null) return null;
+  const obj = result as Record<string, unknown>;
+  if (typeof obj.response === "string") return obj.response;
+  const choices = obj.choices;
+  if (Array.isArray(choices) && choices.length > 0) {
+    const message = (choices[0] as Record<string, unknown> | undefined)?.message;
+    const content = (message as Record<string, unknown> | undefined)?.content;
+    if (typeof content === "string") return content;
+  }
+  return null;
+}
+
+function stripZaiCodeFence(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1] : trimmed;
+}
+
+async function callZaiCompletions(
+  model: string,
+  messages: ChatMsg[],
+  schemaHint: string,
+  maxTokens: number
+): Promise<{ ok: true; text: string } | { ok: false; error: string; retryable: boolean }> {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) return { ok: false, error: "ZAI (Cloudflare Workers AI) not configured", retryable: false };
+
+  const withHint = messages.map((m) => (m.role === "system" ? { ...m, content: m.content + schemaHint } : m));
+
+  let res: Response;
+  try {
+    res = await fetch(zaiEndpoint(accountId, model), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiToken}` },
+      body: JSON.stringify({
+        messages: withHint,
+        chat_template_kwargs: { enable_thinking: false },
+        max_tokens: maxTokens,
+        temperature: 0.2,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    const isTimeout = e instanceof Error && e.name === "TimeoutError";
+    return { ok: false, error: isTimeout ? "request timed out" : "request failed", retryable: false };
+  }
+
+  if (res.status === 429) {
+    console.warn("[support.ai] zai rate limited");
+    return { ok: false, error: "rate limited", retryable: false };
+  }
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    console.warn("[support.ai] zai non-200 response", res.status, bodyText.slice(0, 500));
+    return { ok: false, error: "provider error", retryable: false };
+  }
+
+  const envelope = await res.json();
+  if (envelope?.success !== true) {
+    console.warn("[support.ai] zai envelope reported failure", JSON.stringify(envelope?.errors ?? []).slice(0, 300));
+    return { ok: false, error: "provider error", retryable: false };
+  }
+
+  const text = extractZaiResponseText(envelope.result);
+  // No server-side schema validation for this provider - unlike Groq's
+  // json_validate_failed signal, treat "no text" as worth one retry too.
+  if (text === null) return { ok: false, error: "no content returned", retryable: true };
+  return { ok: true, text };
+}
+
+async function callZaiJsonWithRetry(
+  model: string,
+  messages: ChatMsg[],
+  schemaHint: string,
+  maxTokens: number
+): Promise<{ ok: true; parsed: unknown } | { ok: false; error: string }> {
+  let result = await callZaiCompletions(model, messages, schemaHint, maxTokens);
+  if (!result.ok && result.retryable) {
+    result = await callZaiCompletions(model, messages, schemaHint, maxTokens);
+  }
+  if (!result.ok) return { ok: false, error: result.error };
+
+  try {
+    return { ok: true, parsed: JSON.parse(stripZaiCodeFence(result.text)) };
+  } catch {
+    return { ok: false, error: "invalid JSON from provider" };
+  }
+}
 
 async function callChatCompletions(
   endpoint: string,
@@ -141,6 +247,20 @@ export async function callOpenAiSupport(model: string, messages: ChatMsg[], maxT
   return callSupport(OPENAI_ENDPOINT, "OPENAI_API_KEY", model, messages, maxTokens);
 }
 
+export async function callZaiSupport(model: string, messages: ChatMsg[], maxTokens: number): Promise<SupportChatResult> {
+  const result = await callZaiJsonWithRetry(model, messages, SUPPORT_SCHEMA_HINT, maxTokens);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  const parsed = result.parsed as Record<string, unknown>;
+  if (typeof parsed.reply !== "string") return { ok: false, error: "invalid response shape" };
+  return {
+    ok: true,
+    reply: parsed.reply,
+    suggestEscalation: !!parsed.suggest_escalation,
+    escalationReason: typeof parsed.escalation_reason === "string" ? parsed.escalation_reason : "",
+  };
+}
+
 /**
  * Lets the AI itself judge which knowledge-base articles are relevant to
  * the customer's message — semantic, not string matching, so a customer
@@ -188,4 +308,30 @@ export async function selectRelevantGroq(model: string, userMessage: string, can
 
 export async function selectRelevantOpenAi(model: string, userMessage: string, candidates: { id: string; title: string; category: string }[]): Promise<RelevanceResult> {
   return selectRelevant(OPENAI_ENDPOINT, "OPENAI_API_KEY", model, userMessage, candidates);
+}
+
+export async function selectRelevantZai(model: string, userMessage: string, candidates: { id: string; title: string; category: string }[]): Promise<RelevanceResult> {
+  if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) return { ok: false };
+  if (candidates.length === 0) return { ok: true, ids: [] };
+
+  const list = candidates.map((c) => `${c.id} | [${c.category}] ${c.title}`).join("\n");
+  const messages: ChatMsg[] = [
+    {
+      role: "system",
+      content:
+        "คุณช่วยเลือกว่าบทความความรู้ข้อไหนเกี่ยวข้องกับคำถามของลูกค้า ให้พิจารณาความหมายจริง ไม่ใช่แค่คำที่ตรงกันตัวต่อตัว " +
+        "(ลูกค้าอาจสะกดต่างไปหรือถามอ้อมๆ แต่ความหมายตรงกับหัวข้อได้) ตอบเฉพาะ id ของบทความที่เกี่ยวข้องจริงๆ เท่านั้น ถ้าไม่มีข้อไหนเกี่ยวข้องให้ตอบ array ว่าง",
+    },
+    { role: "user", content: `รายการบทความ (id | หมวดหมู่ หัวข้อ):\n${list}\n\nคำถามลูกค้า: ${userMessage}` },
+  ];
+
+  const result = await callZaiJsonWithRetry(model, messages, RELEVANCE_SCHEMA_HINT, 300);
+  if (!result.ok) {
+    console.warn("[support.ai] zai relevance selection failed", result.error);
+    return { ok: false };
+  }
+  const ids = (result.parsed as Record<string, unknown>).relevant_ids;
+  if (!Array.isArray(ids)) return { ok: false };
+  const validIds = new Set(candidates.map((c) => c.id));
+  return { ok: true, ids: ids.filter((id): id is string => typeof id === "string" && validIds.has(id)) };
 }
