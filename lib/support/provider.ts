@@ -104,7 +104,17 @@ async function callZaiCompletions(
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
   if (!accountId || !apiToken) return { ok: false, error: "ZAI (Cloudflare Workers AI) not configured", retryable: false };
 
-  const withHint = messages.map((m) => (m.role === "system" ? { ...m, content: m.content + schemaHint } : m));
+  // Confirmed in production logs: on turn 2+ of a conversation, GLM
+  // answers in plain Thai prose with zero JSON, ignoring the system
+  // prompt's format instruction entirely - a multi-turn instruction gets
+  // drowned out by conversational momentum. Repeating the hint on the
+  // trailing user turn (closest to generation) keeps it front-of-mind.
+  const lastIdx = messages.length - 1;
+  const withHint = messages.map((m, i) => {
+    if (m.role === "system") return { ...m, content: m.content + schemaHint };
+    if (i === lastIdx && m.role === "user") return { ...m, content: m.content + schemaHint };
+    return m;
+  });
 
   let res: Response;
   try {
@@ -160,7 +170,7 @@ async function callZaiJsonWithRetry(
   messages: ChatMsg[],
   schemaHint: string,
   maxTokens: number
-): Promise<{ ok: true; parsed: unknown } | { ok: false; error: string }> {
+): Promise<{ ok: true; parsed: unknown } | { ok: false; error: string; lastText?: string }> {
   let result = await callZaiCompletions(model, messages, schemaHint, maxTokens);
   if (!result.ok && result.retryable) {
     result = await callZaiCompletions(model, messages, schemaHint, maxTokens);
@@ -170,15 +180,17 @@ async function callZaiJsonWithRetry(
   let parsed = tryParseZaiJson(result.text);
   if (!parsed.ok) {
     // Fetch succeeded but the reply wasn't clean JSON (chatty preamble,
-    // truncation, etc.) - worth exactly one more try, same idiom as the
-    // fetch-level retry above and as lib/ai/zai-provider.ts's retry.
+    // truncation, or - confirmed in production logs - GLM answering in
+    // plain prose with zero JSON on turn 2+ of a conversation) - worth
+    // exactly one more try, same idiom as the fetch-level retry above and
+    // as lib/ai/zai-provider.ts's retry.
     console.warn("[support.ai] zai invalid JSON, retrying once:", result.text.slice(0, 300));
     const retry = await callZaiCompletions(model, messages, schemaHint, maxTokens);
-    if (!retry.ok) return { ok: false, error: retry.error };
+    if (!retry.ok) return { ok: false, error: retry.error, lastText: result.text };
     parsed = tryParseZaiJson(retry.text);
     if (!parsed.ok) {
       console.warn("[support.ai] zai invalid JSON after retry:", retry.text.slice(0, 300));
-      return { ok: false, error: "invalid JSON from provider" };
+      return { ok: false, error: "invalid JSON from provider", lastText: retry.text };
     }
   }
   return parsed;
@@ -280,7 +292,19 @@ export async function callOpenAiSupport(model: string, messages: ChatMsg[], maxT
 
 export async function callZaiSupport(model: string, messages: ChatMsg[], maxTokens: number): Promise<SupportChatResult> {
   const result = await callZaiJsonWithRetry(model, messages, SUPPORT_SCHEMA_HINT, maxTokens);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) {
+    // GLM sometimes ignores the JSON format instruction entirely on
+    // later conversation turns and just answers in plain prose (see
+    // callZaiJsonWithRetry's comment) - that prose is still a real,
+    // safe, on-topic customer-facing answer, so use it directly rather
+    // than surfacing "AI service is temporarily unavailable" for a
+    // reply that actually succeeded. Only escalation detection is lost
+    // for this one turn (suggestEscalation defaults false).
+    if (result.lastText && result.lastText.trim()) {
+      return { ok: true, reply: result.lastText.trim(), suggestEscalation: false, escalationReason: "" };
+    }
+    return { ok: false, error: result.error };
+  }
 
   const parsed = result.parsed as Record<string, unknown>;
   if (typeof parsed.reply !== "string") return { ok: false, error: "invalid response shape" };
