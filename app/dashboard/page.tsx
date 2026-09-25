@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/plans";
@@ -237,6 +238,30 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
+      </div>
+
+      <div className="mt-5 card p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 bg-gradient-to-br from-brand-50 to-white">
+        <div className="w-14 h-14 shrink-0 rounded-2xl bg-brand-600 text-white flex items-center justify-center">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="6" y="2" width="12" height="20" rx="2" />
+            <path d="M11 18h2" />
+          </svg>
+        </div>
+        <div className="flex-1 text-center sm:text-left">
+          <h2 className="font-bold text-brand-800">ดาวน์โหลดแอป SMF IoT</h2>
+          <p className="mt-1 text-sm text-brand-900/60">
+            ติดตามฟาร์ม ควบคุมอุปกรณ์ และรับแจ้งเตือนได้ทุกที่ผ่านแอปมือถือ
+          </p>
+        </div>
+        <a
+          href="https://play.google.com/store/apps/details?id=com.bkknex.smfiot"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 transition hover:opacity-90 hover:-translate-y-0.5"
+          aria-label="ดาวน์โหลด SMF IoT บน Google Play"
+        >
+          <Image src="/images/google-play-badge.png" alt="Get it on Google Play" width={209} height={61} className="h-14 w-auto" />
+        </a>
       </div>
 
       <div className="mt-8 card p-6 sm:p-8">

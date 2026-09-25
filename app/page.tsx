@@ -163,6 +163,8 @@ const appFeatures = [
   { icon: <I.Bell />, t: "แจ้งเตือนอัตโนมัติ" },
 ];
 
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.bkknex.smfiot";
+
 // Section 7 — SMF Ecosystem
 const ecosystem = [
   { t: "SMF IoT Node", d: "อุปกรณ์เก็บข้อมูลและควบคุมภาคสนาม", future: false },
@@ -468,6 +470,16 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              <a
+                href={PLAY_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-block transition hover:opacity-90 hover:-translate-y-0.5"
+                aria-label="ดาวน์โหลด SMF IoT บน Google Play"
+              >
+                <Image src="/images/google-play-badge.png" alt="Get it on Google Play" width={209} height={61} className="h-14 w-auto" />
+              </a>
             </div>
 
             {/* Phone mockup */}
